@@ -1,0 +1,169 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    color-scheme: dark;
+    scroll-behavior: smooth;
+  }
+
+  body {
+    min-width: 320px;
+    background: #09090b;
+    font-family: "Plus Jakarta Sans", sans-serif;
+  }
+
+  ::selection {
+    color: #09090b;
+    background: #d4af69;
+  }
+}
+
+@layer components {
+  .script {
+    font-family: "Alex Brush", cursive;
+  }
+
+  .card {
+    @apply rounded-xl border border-line bg-[#111113] shadow-xl shadow-black/20;
+  }
+
+  .btn {
+    @apply inline-flex min-h-11 items-center justify-center rounded-lg px-4 py-2 font-semibold transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gold disabled:cursor-not-allowed disabled:opacity-50;
+  }
+
+  .btn-primary {
+    @apply bg-gold text-[#17130d] hover:bg-[#e2c481];
+  }
+
+  .btn-outline {
+    @apply border border-line bg-transparent text-ink hover:border-gold hover:text-gold;
+  }
+
+  .btn-ghost {
+    @apply bg-transparent text-ink-muted hover:bg-sand hover:text-gold;
+  }
+
+  .nav-link {
+    @apply text-ink-muted transition-colors hover:text-gold;
+  }
+
+  .badge {
+    @apply inline-flex rounded-full px-3 py-1 text-[0.65rem] font-semibold uppercase tracking-wider;
+  }
+
+  .badge-gold {
+    @apply bg-gold text-[#17130d];
+  }
+
+  .badge-line {
+    @apply border border-line text-ink-muted;
+  }
+
+  .form-label {
+    @apply block space-y-2 text-sm font-medium text-ink;
+  }
+
+  .form-input {
+    @apply min-h-11 w-full rounded-lg border border-line bg-canvas px-3 py-2 text-ink placeholder:text-ink-muted/70 focus:border-gold focus:outline-none focus:ring-1 focus:ring-gold;
+  }
+
+  .step {
+    @apply rounded-xl border border-line bg-canvas p-5;
+  }
+
+  .step-num {
+    @apply flex h-8 w-8 items-center justify-center rounded-full bg-gold font-semibold text-canvas;
+  }
+
+  .step-title {
+    @apply mt-4 font-semibold;
+  }
+
+  .step-desc {
+    @apply mt-2 text-sm leading-relaxed text-ink-muted;
+  }
+
+  .adv {
+    @apply rounded-xl border border-line bg-canvas/60 p-5;
+  }
+
+  .adv h3 {
+    @apply font-semibold text-gold;
+  }
+
+  .adv p {
+    @apply mt-2 text-sm leading-relaxed text-ink-muted;
+  }
+
+  .phone-frame {
+    @apply aspect-[9/16] w-64 rounded-[2.5rem] border-4 border-[#333338] bg-canvas p-2 shadow-2xl;
+  }
+
+  .phone-screen {
+    @apply h-full overflow-hidden rounded-[2rem] bg-sand;
+  }
+
+  .thumb {
+    @apply bg-sand;
+  }
+
+  .preview-shell {
+    background-color: var(--preview-bg);
+    color: var(--preview-text);
+    font-family: var(--preview-body), "Plus Jakarta Sans", sans-serif;
+  }
+
+  .preview-cover {
+    background-color: var(--preview-bg);
+  }
+
+  .preview-copy {
+    color: var(--preview-text);
+  }
+
+  .preview-couple {
+    color: var(--preview-accent);
+    font-family: var(--preview-heading), "Cormorant Garamond", serif;
+  }
+
+  .preview-sections {
+    background-color: var(--preview-surface);
+    color: var(--preview-bg);
+  }
+
+  .preview-section-title {
+    color: var(--preview-accent);
+  }
+
+  .preview-layout-editorial .preview-section {
+    border-radius: 0;
+    border-bottom: 1px solid var(--preview-accent);
+  }
+
+  .preview-layout-story-first .preview-cover {
+    aspect-ratio: 4 / 5;
+  }
+
+  .preview-cover-framed .preview-copy {
+    outline: 1px solid var(--preview-accent);
+    outline-offset: 0.75rem;
+  }
+
+  .preview-cover-torii .preview-copy {
+    padding-top: 1.5rem;
+    padding-bottom: 1.5rem;
+    border-top: 1px solid var(--preview-accent);
+    border-bottom: 1px solid var(--preview-accent);
+  }
+
+  .preview-cover-split img {
+    object-position: center 35%;
+  }
+
+  .preview-cover-fullbleed img,
+  .preview-cover-parallax img {
+    transform: scale(1.05);
+  }
+}

@@ -1,0 +1,431 @@
+<!doctype html>
+<!-- saved from url=(0042)http://0.0.0.0:9000/templates?package_id=3 -->
+<html lang="id">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>SUKA MOTO | Visual Storyteller</title>
+    <link rel="stylesheet" href="./platinum_files/all.min.css" />
+    <link href="./platinum_files/css2" rel="stylesheet" />
+    <style>
+      * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+        font-family: "Plus Jakarta Sans", sans-serif;
+      }
+      body {
+        background: #09090b;
+        color: #f4f4f5;
+        display: flex;
+        justify-content: center;
+      }
+      .container {
+        width: 100%;
+        max-width: 480px;
+        min-height: 100vh;
+        background: #0c0c0e;
+        padding: 20px;
+        border-left: 1px solid #27272a;
+        border-right: 1px solid #27272a;
+        position: relative;
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+      }
+      .content-wrap {
+        flex: 1;
+      }
+      .navbar {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 25px;
+        padding-bottom: 12px;
+        border-bottom: 1px solid #27272a;
+      }
+      .brand-group {
+        display: flex;
+        flex-direction: column;
+        text-decoration: none;
+      }
+      .brand-main {
+        font-size: 15px;
+        font-weight: 800;
+        color: #fff;
+        letter-spacing: 1px;
+      }
+      .brand-sub {
+        font-family: "Alex Brush", cursive;
+        font-size: 22px;
+        color: #fbbf24;
+        margin-top: -8px;
+        line-height: 1;
+      }
+      .nav-actions {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .hamburger-btn {
+        background: none;
+        border: none;
+        color: #a1a1aa;
+        font-size: 16px;
+        cursor: pointer;
+        padding: 6px;
+        border-radius: 6px;
+        transition: 0.2s;
+      }
+      .hamburger-btn:hover {
+        color: #fbbf24;
+        background: #18181b;
+      }
+      .menu-dropdown {
+        display: none;
+        position: absolute;
+        top: 55px;
+        right: 20px;
+        background: #18181b;
+        border: 1px solid #27272a;
+        border-radius: 8px;
+        width: 180px;
+        z-index: 100;
+        box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.5);
+      }
+      .menu-dropdown a {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 10px 12px;
+        color: #f4f4f5;
+        text-decoration: none;
+        font-size: 11px;
+        border-bottom: 1px solid #27272a;
+      }
+      .menu-dropdown a:last-child {
+        border-bottom: none;
+      }
+      .menu-dropdown a:hover {
+        background: #27272a;
+        color: #fbbf24;
+        border-radius: 8px;
+      }
+      .section-title {
+        font-size: 11px;
+        text-transform: uppercase;
+        letter-spacing: 1.5px;
+        color: #fbbf24;
+        margin-bottom: 15px;
+        font-weight: bold;
+      }
+      .footer {
+        margin-top: 40px;
+        border-top: 1px solid #27272a;
+        padding: 25px 0 15px 0;
+        text-align: center;
+      }
+      .footer-brand {
+        font-size: 13px;
+        font-weight: bold;
+        color: #fff;
+        margin-bottom: 6px;
+      }
+      .admin-footer-btn {
+        background: none;
+        border: none;
+        color: #71717a;
+        cursor: pointer;
+        font-size: 12px;
+        padding: 2px 6px;
+        border-radius: 4px;
+        transition: 0.2s;
+        margin-left: 6px;
+      }
+      .admin-footer-btn:hover {
+        color: #fbbf24;
+        background: #18181b;
+      }
+      .footer-tagline {
+        font-size: 11px;
+        color: #a1a1aa;
+        margin-bottom: 15px;
+      }
+      .social-icons {
+        display: flex;
+        justify-content: center;
+        gap: 15px;
+        margin-bottom: 15px;
+      }
+      .social-icons a {
+        background: #18181b;
+        border: 1px solid #27272a;
+        width: 32px;
+        height: 32px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: #fbbf24;
+        font-size: 13px;
+        text-decoration: none;
+        transition: background 0.2s;
+      }
+      .social-icons a:hover {
+        background: #fbbf24;
+        color: #000;
+      }
+      .footer-web {
+        font-size: 11px;
+        color: #34d399;
+        text-decoration: none;
+        font-weight: 600;
+        display: inline-block;
+        margin-bottom: 15px;
+      }
+      .copyright {
+        font-size: 10px;
+        color: #71717a;
+        border-top: 1px solid #18181b;
+        padding-top: 12px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 4px;
+      }
+    </style>
+
+    <style>
+      .back-link {
+        font-size: 11px;
+        color: #fbbf24;
+        text-decoration: none;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        margin-bottom: 15px;
+        font-weight: bold;
+      }
+      .page-heading {
+        margin-bottom: 20px;
+      }
+      .page-heading h2 {
+        font-size: 16px;
+        color: #fff;
+        font-weight: 700;
+      }
+      .page-heading p {
+        font-size: 11px;
+        color: #a1a1aa;
+      }
+      .template-grid {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 12px;
+      }
+      .tmpl-card {
+        background: #18181b;
+        border: 1px solid #27272a;
+        border-radius: 12px;
+        overflow: hidden;
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+      }
+      .tmpl-img {
+        width: 100%;
+        height: 110px;
+        overflow: hidden;
+        position: relative;
+      }
+      .tmpl-img img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+      }
+      .badge-disc {
+        position: absolute;
+        top: 8px;
+        left: 8px;
+        background: #ef4444;
+        color: #fff;
+        font-size: 9px;
+        font-weight: bold;
+        padding: 2px 6px;
+        border-radius: 4px;
+      }
+      .tmpl-info {
+        padding: 10px;
+        display: flex;
+        flex-direction: column;
+        flex-grow: 1;
+        justify-content: space-between;
+      }
+      .tmpl-info h4 {
+        font-size: 12px;
+        color: #fff;
+        font-weight: 600;
+        margin-bottom: 2px;
+        line-height: 1.3;
+      }
+      .tmpl-price {
+        font-size: 11px;
+        color: #34d399;
+        font-weight: bold;
+        display: block;
+        margin-bottom: 4px;
+      }
+      .tmpl-dur {
+        font-size: 10px;
+        color: #a1a1aa;
+        display: block;
+        margin-bottom: 8px;
+      }
+      .preview-btn {
+        background: #27272a;
+        color: #fbbf24;
+        text-align: center;
+        padding: 6px;
+        border-radius: 6px;
+        text-decoration: none;
+        font-size: 10px;
+        font-weight: bold;
+        transition: background 0.2s;
+        display: block;
+      }
+      .preview-btn:hover {
+        background: #fbbf24;
+        color: #000;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <div class="content-wrap">
+        <div class="navbar">
+          <a href="http://0.0.0.0:9000/" class="brand-group">
+            <span class="brand-main">SUKA MOTO</span>
+            <span class="brand-sub">Invitation</span>
+          </a>
+          <div class="nav-actions">
+            <button class="hamburger-btn" onclick="toggleMenu()">
+              <i class="fa-solid fa-bars"></i>
+            </button>
+            <div id="menuDropdown" class="menu-dropdown">
+              <a href="http://0.0.0.0:9000/"
+                ><i class="fa-solid fa-house" style="color: #fbbf24"></i>
+                Home</a
+              >
+              <div
+                style="
+                  padding: 6px 12px;
+                  font-size: 9px;
+                  font-weight: bold;
+                  color: #71717a;
+                  text-transform: uppercase;
+                  border-top: 1px solid #27272a;
+                  border-bottom: 1px solid #27272a;
+                  margin-top: 4px;
+                "
+              >
+                Kategori Paket
+              </div>
+              <a href="http://0.0.0.0:9000/templates?package_id=1"
+                ><i class="fa-solid fa-folder" style="color: #fbbf24"></i>
+                Silver Package</a
+              ><a href="http://0.0.0.0:9000/templates?package_id=2"
+                ><i class="fa-solid fa-folder" style="color: #fbbf24"></i> Gold
+                Package</a
+              ><a href="http://0.0.0.0:9000/templates?package_id=3"
+                ><i class="fa-solid fa-folder" style="color: #fbbf24"></i>
+                Platinum VIP</a
+              >
+            </div>
+          </div>
+        </div>
+
+        <a href="http://0.0.0.0:9000/" class="back-link"
+          ><i class="fa-solid fa-arrow-left"></i> Kembali ke Beranda</a
+        >
+
+        <div class="page-heading">
+          <h2>Platinum VIP</h2>
+          <p>Pilih template eksklusif sesuai tema pernikahan Anda</p>
+        </div>
+
+        <div class="template-grid">
+          <p
+            style="
+              grid-column: span 2;
+              text-align: center;
+              color: #71717a;
+              font-size: 12px;
+              padding: 30px;
+            "
+          >
+            Belum ada template di paket ini.
+          </p>
+        </div>
+      </div>
+
+      <div class="footer">
+        <div class="footer-brand">SUKA MOTO</div>
+        <div class="footer-tagline">
+          Visual storyteller | Portrait &amp; editorial
+        </div>
+        <div class="social-icons">
+          <a href="https://instagram.com/sukaamotoo" target="_blank"
+            ><i class="fa-brands fa-instagram"></i
+          ></a>
+          <a href="https://facebook.com/" target="_blank"
+            ><i class="fa-brands fa-facebook-f"></i
+          ></a>
+          <a href="https://wa.me/6285156918852" target="_blank"
+            ><i class="fa-brands fa-whatsapp"></i
+          ></a>
+        </div>
+        <a
+          href="https://www.sukamoto.web.id/"
+          target="_blank"
+          class="footer-web"
+          ><i class="fa-solid fa-globe"></i> www.sukamoto.web.id</a
+        >
+        <div class="copyright">
+          © 2026 SUKA MOTO. All Rights Reserved.
+          <button
+            class="admin-footer-btn"
+            onclick="accessAdmin()"
+            title="Admin Control"
+          >
+            <i class="fa-solid fa-shield-halved"></i>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      function accessAdmin() {
+        const pin = prompt("Masukkan PIN Keamanan Admin:");
+        if (pin === "110202") {
+          window.location.href = "/admin";
+        } else if (pin !== null) {
+          alert("PIN Salah! Akses ditolak.");
+        }
+      }
+      function toggleMenu() {
+        var menu = document.getElementById("menuDropdown");
+        menu.style.display = menu.style.display === "block" ? "none" : "block";
+      }
+      window.onclick = function (event) {
+        if (
+          !event.target.matches(".hamburger-btn") &&
+          !event.target.closest(".hamburger-btn")
+        ) {
+          var menu = document.getElementById("menuDropdown");
+          if (menu) menu.style.display = "none";
+        }
+      };
+    </script>
+  </body>
+</html>
