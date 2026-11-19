@@ -20,6 +20,9 @@ import (
 type DB struct {
 	SQL     *sql.DB
 	Queries *generated.Queries
+	// UploadDir is the private filesystem directory holding payment proof
+	// images. It is never served directly over HTTP.
+	UploadDir string
 }
 
 var migrationMu sync.Mutex
@@ -27,12 +30,28 @@ var gooseSetup sync.Once
 var gooseSetupErr error
 
 func Open(ctx context.Context, path string) (*DB, error) {
+	return OpenWithUploads(ctx, path, "")
+}
+
+// OpenWithUploads opens SQLite and configures the private payment proof
+// directory. An empty uploads path disables filesystem-backed payments.
+func OpenWithUploads(ctx context.Context, path, uploadsPath string) (*DB, error) {
 	if path == "" {
 		return nil, fmt.Errorf("storage: database path cannot be empty")
 	}
 	if path != ":memory:" {
 		if err := os.MkdirAll(filepath.Dir(path), 0o750); err != nil {
 			return nil, fmt.Errorf("storage: create database directory: %w", err)
+		}
+	}
+	var absoluteUploads string
+	if uploadsPath != "" {
+		absoluteUploads, err = filepath.Abs(uploadsPath)
+		if err != nil {
+			return nil, fmt.Errorf("storage: resolve upload directory: %w", err)
+		}
+		if err := os.MkdirAll(absoluteUploads, 0o750); err != nil {
+			return nil, fmt.Errorf("storage: create upload directory: %w", err)
 		}
 	}
 
