@@ -11,22 +11,37 @@ import (
 type Querier interface {
 	CommitSession(ctx context.Context, arg CommitSessionParams) error
 	CountTemplates(ctx context.Context, arg CountTemplatesParams) (int64, error)
+	CreateNotification(ctx context.Context, arg CreateNotificationParams) error
 	CreateOrder(ctx context.Context, arg CreateOrderParams) (int64, error)
+	CreatePayment(ctx context.Context, arg CreatePaymentParams) (int64, error)
 	CreateUser(ctx context.Context, arg CreateUserParams) (int64, error)
 	DeleteExpiredSessions(ctx context.Context, expiresAt int64) error
 	DeleteSession(ctx context.Context, id string) error
 	FindSession(ctx context.Context, arg FindSessionParams) ([]byte, error)
+	GetActivePaymentMethod(ctx context.Context, id string) (GetActivePaymentMethodRow, error)
 	GetOrderByIDForUser(ctx context.Context, arg GetOrderByIDForUserParams) (GetOrderByIDForUserRow, error)
+	GetOrderForUpdateTx(ctx context.Context, arg GetOrderForUpdateTxParams) (GetOrderForUpdateTxRow, error)
 	GetPackage(ctx context.Context, id string) (GetPackageRow, error)
+	GetPaymentByID(ctx context.Context, id int64) (Payment, error)
+	GetPaymentByOrderID(ctx context.Context, orderID int64) (Payment, error)
 	GetTemplate(ctx context.Context, id string) (GetTemplateRow, error)
 	GetTemplatePackages(ctx context.Context, templateID string) ([]GetTemplatePackagesRow, error)
 	GetUserByEmail(ctx context.Context, email string) (GetUserByEmailRow, error)
 	GetUserByID(ctx context.Context, id int64) (GetUserByIDRow, error)
+	ListActivePaymentMethods(ctx context.Context) ([]ListActivePaymentMethodsRow, error)
+	ListNotificationsForUser(ctx context.Context, userID int64) ([]Notification, error)
+	ListOrdersForUserWithPayments(ctx context.Context, userID int64) ([]ListOrdersForUserWithPaymentsRow, error)
 	ListPackages(ctx context.Context) ([]ListPackagesRow, error)
+	ListPaymentsForAdmin(ctx context.Context, status string) ([]ListPaymentsForAdminRow, error)
+	ListPaymentsForUser(ctx context.Context, userID int64) ([]ListPaymentsForUserRow, error)
 	ListTemplateCategories(ctx context.Context) ([]string, error)
 	ListTemplatePackages(ctx context.Context) ([]ListTemplatePackagesRow, error)
 	ListTemplates(ctx context.Context, arg ListTemplatesParams) ([]ListTemplatesRow, error)
+	MarkPaymentSubmitted(ctx context.Context, arg MarkPaymentSubmittedParams) (int64, error)
+	RejectPayment(ctx context.Context, arg RejectPaymentParams) (int64, error)
+	SetOrderStatusIfTx(ctx context.Context, arg SetOrderStatusIfTxParams) (int64, error)
 	TemplateSupportsPackage(ctx context.Context, arg TemplateSupportsPackageParams) (bool, error)
+	VerifyPayment(ctx context.Context, arg VerifyPaymentParams) (int64, error)
 }
 
 var _ Querier = (*Queries)(nil)

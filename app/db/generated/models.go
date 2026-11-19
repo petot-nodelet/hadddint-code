@@ -4,6 +4,20 @@
 
 package generated
 
+import (
+	"database/sql"
+)
+
+type Notification struct {
+	ID        int64         `json:"id"`
+	UserID    int64         `json:"user_id"`
+	OrderID   sql.NullInt64 `json:"order_id"`
+	Kind      string        `json:"kind"`
+	Message   string        `json:"message"`
+	IsRead    int64         `json:"is_read"`
+	CreatedAt string        `json:"created_at"`
+}
+
 type Order struct {
 	ID         int64  `json:"id"`
 	UserID     int64  `json:"user_id"`
@@ -58,6 +72,39 @@ type PackageFeature struct {
 	GuestList            int64  `json:"guest_list"`
 	QrCode               int64  `json:"qr_code"`
 	SocialSharingPreview int64  `json:"social_sharing_preview"`
+}
+
+type Payment struct {
+	ID              int64          `json:"id"`
+	OrderID         int64          `json:"order_id"`
+	UserID          int64          `json:"user_id"`
+	PaymentMethodID string         `json:"payment_method_id"`
+	AmountCents     int64          `json:"amount_cents"`
+	Currency        string         `json:"currency"`
+	Status          string         `json:"status"`
+	ProofFilename   string         `json:"proof_filename"`
+	ProofStoredName string         `json:"proof_stored_name"`
+	ProofMimeType   string         `json:"proof_mime_type"`
+	ProofSizeBytes  int64          `json:"proof_size_bytes"`
+	ProofUploadedAt sql.NullString `json:"proof_uploaded_at"`
+	RejectReason    string         `json:"reject_reason"`
+	ReviewedBy      sql.NullInt64  `json:"reviewed_by"`
+	ReviewedAt      sql.NullString `json:"reviewed_at"`
+	CreatedAt       string         `json:"created_at"`
+	UpdatedAt       string         `json:"updated_at"`
+}
+
+type PaymentMethod struct {
+	ID            string `json:"id"`
+	Name          string `json:"name"`
+	BankName      string `json:"bank_name"`
+	AccountNumber string `json:"account_number"`
+	AccountHolder string `json:"account_holder"`
+	Instructions  string `json:"instructions"`
+	IsActive      int64  `json:"is_active"`
+	SortOrder     int64  `json:"sort_order"`
+	CreatedAt     string `json:"created_at"`
+	UpdatedAt     string `json:"updated_at"`
 }
 
 type Session struct {
