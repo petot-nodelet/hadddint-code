@@ -17,10 +17,10 @@ RETURNING id
 `
 
 type CreatePaymentParams struct {
-	OrderID         int64  `json:"order_id"`
-	UserID          int64  `json:"user_id"`
-	PaymentMethodID string `json:"payment_method_id"`
-	AmountCents     int64  `json:"amount_cents"`
+	OrderID         int64         `json:"order_id"`
+	UserID          sql.NullInt64 `json:"user_id"`
+	PaymentMethodID string        `json:"payment_method_id"`
+	AmountCents     int64         `json:"amount_cents"`
 }
 
 func (q *Queries) CreatePayment(ctx context.Context, arg CreatePaymentParams) (int64, error) {
@@ -120,23 +120,23 @@ ORDER BY pay.id DESC
 `
 
 type ListPaymentsForAdminRow struct {
-	PaymentID        int64  `json:"payment_id"`
-	OrderID          int64  `json:"order_id"`
-	PaymentStatus    string `json:"payment_status"`
-	AmountCents      int64  `json:"amount_cents"`
-	Currency         string `json:"currency"`
-	ProofStoredName  string `json:"proof_stored_name"`
-	RejectReason     string `json:"reject_reason"`
-	PaymentCreatedAt string `json:"payment_created_at"`
-	PaymentUpdatedAt string `json:"payment_updated_at"`
-	UserID           int64  `json:"user_id"`
-	CustomerName     string `json:"customer_name"`
-	CustomerEmail    string `json:"customer_email"`
-	CustomerPhone    string `json:"customer_phone"`
-	PackageName      string `json:"package_name"`
-	TemplateName     string `json:"template_name"`
-	MethodName       string `json:"method_name"`
-	OrderStatus      string `json:"order_status"`
+	PaymentID        int64         `json:"payment_id"`
+	OrderID          int64         `json:"order_id"`
+	PaymentStatus    string        `json:"payment_status"`
+	AmountCents      int64         `json:"amount_cents"`
+	Currency         string        `json:"currency"`
+	ProofStoredName  string        `json:"proof_stored_name"`
+	RejectReason     string        `json:"reject_reason"`
+	PaymentCreatedAt string        `json:"payment_created_at"`
+	PaymentUpdatedAt string        `json:"payment_updated_at"`
+	UserID           sql.NullInt64 `json:"user_id"`
+	CustomerName     string        `json:"customer_name"`
+	CustomerEmail    string        `json:"customer_email"`
+	CustomerPhone    string        `json:"customer_phone"`
+	PackageName      string        `json:"package_name"`
+	TemplateName     string        `json:"template_name"`
+	MethodName       string        `json:"method_name"`
+	OrderStatus      string        `json:"order_status"`
 }
 
 func (q *Queries) ListPaymentsForAdmin(ctx context.Context, status string) ([]ListPaymentsForAdminRow, error) {
@@ -199,26 +199,26 @@ ORDER BY pay.id DESC
 `
 
 type ListPaymentsForUserRow struct {
-	PaymentID        int64  `json:"payment_id"`
-	OrderID          int64  `json:"order_id"`
-	PaymentStatus    string `json:"payment_status"`
-	AmountCents      int64  `json:"amount_cents"`
-	Currency         string `json:"currency"`
-	ProofStoredName  string `json:"proof_stored_name"`
-	RejectReason     string `json:"reject_reason"`
-	PaymentCreatedAt string `json:"payment_created_at"`
-	PaymentUpdatedAt string `json:"payment_updated_at"`
-	UserID           int64  `json:"user_id"`
-	CustomerName     string `json:"customer_name"`
-	CustomerEmail    string `json:"customer_email"`
-	CustomerPhone    string `json:"customer_phone"`
-	PackageName      string `json:"package_name"`
-	TemplateName     string `json:"template_name"`
-	MethodName       string `json:"method_name"`
-	OrderStatus      string `json:"order_status"`
+	PaymentID        int64         `json:"payment_id"`
+	OrderID          int64         `json:"order_id"`
+	PaymentStatus    string        `json:"payment_status"`
+	AmountCents      int64         `json:"amount_cents"`
+	Currency         string        `json:"currency"`
+	ProofStoredName  string        `json:"proof_stored_name"`
+	RejectReason     string        `json:"reject_reason"`
+	PaymentCreatedAt string        `json:"payment_created_at"`
+	PaymentUpdatedAt string        `json:"payment_updated_at"`
+	UserID           sql.NullInt64 `json:"user_id"`
+	CustomerName     string        `json:"customer_name"`
+	CustomerEmail    string        `json:"customer_email"`
+	CustomerPhone    string        `json:"customer_phone"`
+	PackageName      string        `json:"package_name"`
+	TemplateName     string        `json:"template_name"`
+	MethodName       string        `json:"method_name"`
+	OrderStatus      string        `json:"order_status"`
 }
 
-func (q *Queries) ListPaymentsForUser(ctx context.Context, userID int64) ([]ListPaymentsForUserRow, error) {
+func (q *Queries) ListPaymentsForUser(ctx context.Context, userID sql.NullInt64) ([]ListPaymentsForUserRow, error) {
 	rows, err := q.db.QueryContext(ctx, listPaymentsForUser, userID)
 	if err != nil {
 		return nil, err

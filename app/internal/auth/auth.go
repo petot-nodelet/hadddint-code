@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/alexedwards/scs/v2"
@@ -137,8 +138,19 @@ func (m *Manager) CSRFMiddleware(next http.Handler) http.Handler {
 			next.ServeHTTP(w, r)
 			return
 		}
-		r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
-		if err := r.ParseForm(); err != nil {
+		isMultipart := strings.HasPrefix(r.Header.Get("Content-Type"), "multipart/form-data")
+		maxBodyBytes := int64(1 << 20)
+		if isMultipart {
+			maxBodyBytes = 6 << 20
+		}
+		r.Body = http.MaxBytesReader(w, r.Body, maxBodyBytes)
+		var err error
+		if isMultipart {
+			err = r.ParseMultipartForm(1 << 20)
+		} else {
+			err = r.ParseForm()
+		}
+		if err != nil {
 			http.Error(w, "Invalid form submission", http.StatusBadRequest)
 			return
 		}

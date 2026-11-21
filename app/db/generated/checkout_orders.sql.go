@@ -20,20 +20,20 @@ WHERE o.id = ? AND o.user_id = ?
 `
 
 type GetOrderForUpdateTxParams struct {
-	ID     int64 `json:"id"`
-	UserID int64 `json:"user_id"`
+	ID     int64         `json:"id"`
+	UserID sql.NullInt64 `json:"user_id"`
 }
 
 type GetOrderForUpdateTxRow struct {
-	ID           int64  `json:"id"`
-	UserID       int64  `json:"user_id"`
-	PackageID    string `json:"package_id"`
-	PackageName  string `json:"package_name"`
-	PriceCents   int64  `json:"price_cents"`
-	DurationDays int64  `json:"duration_days"`
-	TemplateID   string `json:"template_id"`
-	TemplateName string `json:"template_name"`
-	Status       string `json:"status"`
+	ID           int64         `json:"id"`
+	UserID       sql.NullInt64 `json:"user_id"`
+	PackageID    string        `json:"package_id"`
+	PackageName  string        `json:"package_name"`
+	PriceCents   int64         `json:"price_cents"`
+	DurationDays int64         `json:"duration_days"`
+	TemplateID   string        `json:"template_id"`
+	TemplateName string        `json:"template_name"`
+	Status       string        `json:"status"`
 }
 
 func (q *Queries) GetOrderForUpdateTx(ctx context.Context, arg GetOrderForUpdateTxParams) (GetOrderForUpdateTxRow, error) {
@@ -81,7 +81,7 @@ type ListOrdersForUserWithPaymentsRow struct {
 	MethodName    string         `json:"method_name"`
 }
 
-func (q *Queries) ListOrdersForUserWithPayments(ctx context.Context, userID int64) ([]ListOrdersForUserWithPaymentsRow, error) {
+func (q *Queries) ListOrdersForUserWithPayments(ctx context.Context, userID sql.NullInt64) ([]ListOrdersForUserWithPaymentsRow, error) {
 	rows, err := q.db.QueryContext(ctx, listOrdersForUserWithPayments, userID)
 	if err != nil {
 		return nil, err

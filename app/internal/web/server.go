@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"log"
 	"net/http"
-	"net/mail"
 	"net/url"
 	"path/filepath"
 	"strconv"
@@ -20,9 +19,11 @@ import (
 )
 
 type Server struct {
-	DB        *storage.DB
-	Auth      *auth.Manager
-	StaticDir string
+	DB            *storage.DB
+	Auth          *auth.Manager
+	StaticDir     string
+	SecureCookies bool
+	trackLimiter  *trackLimiter
 }
 
 func NewServer(db *storage.DB, manager *auth.Manager, staticDir string) (*Server, error) {
@@ -36,7 +37,10 @@ func NewServer(db *storage.DB, manager *auth.Manager, staticDir string) (*Server
 	if err != nil {
 		return nil, fmt.Errorf("web: resolve static directory: %w", err)
 	}
-	return &Server{DB: db, Auth: manager, StaticDir: absoluteStaticDir}, nil
+	return &Server{
+		DB: db, Auth: manager, StaticDir: absoluteStaticDir,
+		trackLimiter: newTrackLimiter(),
+	}, nil
 }
 
 func (s *Server) Routes() http.Handler {
@@ -49,21 +53,41 @@ func (s *Server) Routes() http.Handler {
 	r.Use(s.Auth.CSRFMiddleware)
 
 	r.Get("/", s.handleLanding)
-	r.Get("/login", s.handleLoginPage)
-	r.Post("/login", s.handleLogin)
-	r.Get("/register", s.handleRegisterPage)
-	r.Post("/register", s.handleRegister)
-	r.Post("/logout", s.handleLogout)
-	r.With(s.requireRole(auth.RoleCustomer)).Get("/dashboard", s.handleCustomerDashboard)
+	r.Get("/login", func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, "/admin/login", http.StatusSeeOther)
+	})
+	r.Method(http.MethodPost, "/login", http.NotFoundHandler())
+	r.Method(http.MethodGet, "/register", http.HandlerFunc(gone))
+	r.Method(http.MethodPost, "/register", http.HandlerFunc(gone))
+	r.Method(http.MethodGet, "/dashboard", http.HandlerFunc(gone))
+	r.Get("/admin/login", s.handleAdminLoginPage)
+	r.Post("/admin/login", s.handleAdminLogin)
+	r.With(s.requireRole(auth.RoleAdmin)).Post("/logout", s.handleLogout)
 	r.With(s.requireRole(auth.RoleAdmin)).Get("/admin", s.handleAdminDashboard)
+	r.With(s.requireRole(auth.RoleAdmin)).Get("/admin/orders", s.handleAdminOrders)
+	r.With(s.requireRole(auth.RoleAdmin)).Get("/admin/orders/{orderNumber}", s.handleAdminOrder)
+	r.With(s.requireRole(auth.RoleAdmin)).Post("/admin/orders/{orderNumber}/notes", s.handleAdminOrderNotes)
+	r.With(s.requireRole(auth.RoleAdmin)).Post("/admin/orders/{orderNumber}/status", s.handleAdminOrderStatus)
+	r.With(s.requireRole(auth.RoleAdmin)).Get("/admin/payments/{id}/proof", s.handleAdminPaymentProof)
+	r.With(s.requireRole(auth.RoleAdmin)).Post("/admin/payments/{id}/approve", s.handleAdminPaymentApprove)
+	r.With(s.requireRole(auth.RoleAdmin)).Post("/admin/payments/{id}/reject", s.handleAdminPaymentReject)
 	r.Get("/templates", s.handleTemplateCatalog)
 	r.Get("/templates/{id}", s.handleTemplateDetail)
 	r.Get("/templates/{id}/use", s.handleTemplateSelectionPage)
 	r.Post("/templates/{id}/use", s.handleTemplateUse)
+	r.Get("/orders/{orderNumber}", s.handleGuestCheckout)
+	r.Post("/orders/{orderNumber}/payment", s.handleGuestPaymentProof)
+	r.Get("/track", s.handleTrackForm)
+	r.Post("/track", s.handleTrackSearch)
+	r.Get("/track/{code}", s.handleTrackOrder)
 
 	r.Handle("/static/*", http.StripPrefix("/static/", http.FileServer(http.Dir(filepath.Join(s.StaticDir, "app", "static")))))
 	r.Handle("/index/*", http.StripPrefix("/index/", http.FileServer(http.Dir(filepath.Join(s.StaticDir, "index")))))
 	return r
+}
+
+func gone(w http.ResponseWriter, r *http.Request) {
+	http.Error(w, "Fitur akun pelanggan sudah tidak tersedia. Pesanan dapat dibuat tanpa akun.", http.StatusGone)
 }
 
 func (s *Server) handleLanding(w http.ResponseWriter, r *http.Request) {
@@ -89,79 +113,6 @@ func (s *Server) handleLanding(w http.ResponseWriter, r *http.Request) {
 	s.render(w, r, http.StatusOK, LandingPage(LandingData{Page: page, Templates: templates, Packages: cards}))
 }
 
-func (s *Server) handleLoginPage(w http.ResponseWriter, r *http.Request) {
-	s.renderAuthPage(w, r, "Masuk | SUKAMOTO", "", safeNext(r.URL.Query().Get("next")), http.StatusOK, LoginPage)
-}
-
-func (s *Server) handleRegisterPage(w http.ResponseWriter, r *http.Request) {
-	s.renderAuthPage(w, r, "Daftar | SUKAMOTO", "", safeNext(r.URL.Query().Get("next")), http.StatusOK, RegisterPage)
-}
-
-func (s *Server) renderAuthPage(w http.ResponseWriter, r *http.Request, title, message, next string, status int, page func(AuthPageData) templ.Component) {
-	pageData, err := BuildPageData(r, s.Auth, title, "Akun SUKAMOTO")
-	if err != nil {
-		s.fail(w, "build authentication page", err)
-		return
-	}
-	s.render(w, r, status, page(AuthPageData{Page: pageData, Error: message, Next: next}))
-}
-
-func (s *Server) handleRegister(w http.ResponseWriter, r *http.Request) {
-	fullName := strings.TrimSpace(r.PostForm.Get("full_name"))
-	email := strings.ToLower(strings.TrimSpace(r.PostForm.Get("email")))
-	phone := strings.TrimSpace(r.PostForm.Get("phone"))
-	password := r.PostForm.Get("password")
-	next := safeNext(r.PostForm.Get("next"))
-	message := validateRegistration(fullName, email, phone, password)
-	if message != "" {
-		s.renderAuthPage(w, r, "Daftar | SUKAMOTO", message, next, http.StatusBadRequest, RegisterPage)
-		return
-	}
-	passwordHash, err := auth.HashPassword(password)
-	if err != nil {
-		s.fail(w, "hash registration password", err)
-		return
-	}
-	userID, err := s.DB.CreateUser(r.Context(), fullName, email, phone, passwordHash, auth.RoleCustomer)
-	if errors.Is(err, storage.ErrEmailTaken) {
-		s.renderAuthPage(w, r, "Daftar | SUKAMOTO", "Email sudah terdaftar.", next, http.StatusConflict, RegisterPage)
-		return
-	}
-	if err != nil {
-		s.fail(w, "create customer account", err)
-		return
-	}
-	if err := s.Auth.Login(r.Context(), userID, auth.RoleCustomer, fullName); err != nil {
-		s.fail(w, "start customer session", err)
-		return
-	}
-	s.redirectAfterLogin(w, r, next, auth.RoleCustomer)
-}
-
-func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
-	email := strings.ToLower(strings.TrimSpace(r.PostForm.Get("email")))
-	password := r.PostForm.Get("password")
-	next := safeNext(r.PostForm.Get("next"))
-	if email == "" || password == "" {
-		s.renderAuthPage(w, r, "Masuk | SUKAMOTO", "Email atau password tidak valid.", next, http.StatusUnauthorized, LoginPage)
-		return
-	}
-	user, err := s.DB.GetUserByEmail(r.Context(), email)
-	if errors.Is(err, storage.ErrNotFound) || (err == nil && (user.Status != "active" || !auth.CheckPassword(user.PasswordHash, password))) {
-		s.renderAuthPage(w, r, "Masuk | SUKAMOTO", "Email atau password tidak valid.", next, http.StatusUnauthorized, LoginPage)
-		return
-	}
-	if err != nil {
-		s.fail(w, "load login account", err)
-		return
-	}
-	if err := s.Auth.Login(r.Context(), user.ID, user.Role, user.FullName); err != nil {
-		s.fail(w, "start login session", err)
-		return
-	}
-	s.redirectAfterLogin(w, r, next, user.Role)
-}
-
 func (s *Server) handleLogout(w http.ResponseWriter, r *http.Request) {
 	if err := s.Auth.Logout(r.Context()); err != nil {
 		s.fail(w, "end session", err)
@@ -173,53 +124,27 @@ func (s *Server) handleLogout(w http.ResponseWriter, r *http.Request) {
 func (s *Server) requireRole(role string) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			if !s.Auth.IsAuthenticated(r.Context()) {
-				target := url.QueryEscape(r.URL.RequestURI())
-				http.Redirect(w, r, "/login?next="+target, http.StatusSeeOther)
+			userID, ok := s.Auth.CurrentUserID(r.Context())
+			if !ok {
+				http.Redirect(w, r, "/admin/login", http.StatusSeeOther)
 				return
 			}
 			if s.Auth.CurrentRole(r.Context()) != role {
 				http.Error(w, "Forbidden", http.StatusForbidden)
 				return
 			}
+			user, err := s.DB.GetUserByID(r.Context(), userID)
+			if errors.Is(err, storage.ErrNotFound) || (err == nil && (user.Role != auth.RoleAdmin || user.Status != "active")) {
+				http.Error(w, "Forbidden", http.StatusForbidden)
+				return
+			}
+			if err != nil {
+				s.fail(w, "validate administrator session", err)
+				return
+			}
 			next.ServeHTTP(w, r)
 		})
 	}
-}
-
-func (s *Server) handleCustomerDashboard(w http.ResponseWriter, r *http.Request) {
-	page, err := BuildPageData(r, s.Auth, "Dashboard | SUKAMOTO", "Dashboard pelanggan SUKAMOTO.")
-	if err != nil {
-		s.fail(w, "build customer dashboard", err)
-		return
-	}
-	var order *OrderSummary
-	if rawOrderID := r.URL.Query().Get("order_id"); rawOrderID != "" {
-		orderID, err := strconv.ParseInt(rawOrderID, 10, 64)
-		if err != nil || orderID < 1 {
-			http.Error(w, "Nomor pesanan tidak valid", http.StatusBadRequest)
-			return
-		}
-		userID, ok := s.Auth.CurrentUserID(r.Context())
-		if !ok {
-			http.Error(w, "Unauthorized", http.StatusUnauthorized)
-			return
-		}
-		selection, err := s.DB.GetOrderByIDForUser(r.Context(), orderID, userID)
-		if errors.Is(err, storage.ErrNotFound) {
-			http.NotFound(w, r)
-			return
-		}
-		if err != nil {
-			s.fail(w, "load customer order summary", err)
-			return
-		}
-		order = &OrderSummary{
-			ID: selection.ID, PackageName: selection.PackageName,
-			TemplateName: selection.TemplateName, Status: selection.Status,
-		}
-	}
-	s.render(w, r, http.StatusOK, CustomerDashboard(page, s.Auth.CurrentName(r.Context()), order))
 }
 
 func (s *Server) handleAdminDashboard(w http.ResponseWriter, r *http.Request) {
@@ -388,14 +313,6 @@ func (s *Server) handleTemplateSelectionPage(w http.ResponseWriter, r *http.Requ
 	if !ok {
 		return
 	}
-	if !s.Auth.IsAuthenticated(r.Context()) {
-		s.redirectToTemplateLogin(w, r, template.ID, packageOption.ID)
-		return
-	}
-	if s.Auth.CurrentRole(r.Context()) != auth.RoleCustomer {
-		http.Error(w, "Forbidden", http.StatusForbidden)
-		return
-	}
 	page, err := BuildPageData(r, s.Auth, "Konfirmasi Template | SUKAMOTO", "Konfirmasi pilihan template undangan.")
 	if err != nil {
 		s.fail(w, "build template selection page", err)
@@ -413,25 +330,45 @@ func (s *Server) handleTemplateUse(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	if !s.Auth.IsAuthenticated(r.Context()) {
-		s.redirectToTemplateLogin(w, r, template.ID, packageOption.ID)
+	customerName := strings.TrimSpace(r.PostForm.Get("customer_name"))
+	customerContact := strings.TrimSpace(r.PostForm.Get("customer_contact"))
+	publicName := strings.TrimSpace(r.PostForm.Get("public_name"))
+	if message := validateGuestOrder(customerName, customerContact, publicName); message != "" {
+		page, err := BuildPageData(r, s.Auth, "Mulai Pesanan | SUKAMOTO", "Buat pesanan undangan tanpa akun.")
+		if err != nil {
+			s.fail(w, "build invalid guest order page", err)
+			return
+		}
+		s.render(w, r, http.StatusBadRequest, TemplateSelectionPage(TemplateSelectionData{
+			Page: page, Template: *template, Package: packageOption,
+			CustomerName: customerName, CustomerContact: customerContact,
+			PublicName: publicName, Error: message,
+		}))
 		return
 	}
-	if s.Auth.CurrentRole(r.Context()) != auth.RoleCustomer {
-		http.Error(w, "Forbidden", http.StatusForbidden)
-		return
-	}
-	userID, ok := s.Auth.CurrentUserID(r.Context())
-	if !ok {
-		http.Error(w, "Unauthorized", http.StatusUnauthorized)
-		return
-	}
-	orderID, err := s.DB.CreateOrder(r.Context(), userID, packageOption.ID, template.ID)
+
+	token, accessHash, err := storage.NewOrderAccessToken()
 	if err != nil {
-		s.fail(w, "save customer template selection", err)
+		s.fail(w, "create guest order access token", err)
 		return
 	}
-	http.Redirect(w, r, "/dashboard?order_id="+strconv.FormatInt(orderID, 10), http.StatusSeeOther)
+	order, err := s.DB.CreateGuestOrder(r.Context(), packageOption.ID, template.ID,
+		customerName, customerContact, publicName, accessHash)
+	if errors.Is(err, storage.ErrOrderUnavailable) {
+		http.Error(w, "Paket atau template tidak lagi tersedia. Silakan pilih kembali.", http.StatusBadRequest)
+		return
+	}
+	if err != nil {
+		s.fail(w, "create guest order", err)
+		return
+	}
+	http.SetCookie(w, &http.Cookie{
+		Name: orderAccessCookieName(order.OrderNumber), Value: token,
+		Path: "/orders/" + order.OrderNumber, HttpOnly: true,
+		Secure: s.SecureCookies || r.TLS != nil, SameSite: http.SameSiteStrictMode,
+		Expires: time.Now().Add(30 * 24 * time.Hour), MaxAge: 30 * 24 * 60 * 60,
+	})
+	http.Redirect(w, r, "/orders/"+url.PathEscape(order.OrderNumber), http.StatusSeeOther)
 }
 
 func (s *Server) validateTemplatePackage(w http.ResponseWriter, r *http.Request, templateID, packageID string) (*storage.Template, storage.PackageOption, bool) {
@@ -456,11 +393,6 @@ func (s *Server) validateTemplatePackage(w http.ResponseWriter, r *http.Request,
 	}
 	http.Error(w, "Paket tidak didukung oleh template ini", http.StatusBadRequest)
 	return nil, storage.PackageOption{}, false
-}
-
-func (s *Server) redirectToTemplateLogin(w http.ResponseWriter, r *http.Request, templateID, packageID string) {
-	next := "/templates/" + url.PathEscape(templateID) + "/use?package=" + url.QueryEscape(packageID)
-	http.Redirect(w, r, "/login?next="+url.QueryEscape(next), http.StatusSeeOther)
 }
 
 func containsPackage(packages []storage.PackageRow, packageID string) bool {
@@ -492,45 +424,6 @@ func (s *Server) render(w http.ResponseWriter, r *http.Request, status int, comp
 func (s *Server) fail(w http.ResponseWriter, operation string, err error) {
 	log.Printf("web: %s: %v", operation, err)
 	http.Error(w, "Internal server error", http.StatusInternalServerError)
-}
-
-func (s *Server) redirectAfterLogin(w http.ResponseWriter, r *http.Request, next, role string) {
-	if next == "" {
-		if role == auth.RoleAdmin {
-			next = "/admin"
-		} else {
-			next = "/dashboard"
-		}
-	}
-	http.Redirect(w, r, next, http.StatusSeeOther)
-}
-
-func safeNext(candidate string) string {
-	if candidate == "" || !strings.HasPrefix(candidate, "/") || strings.HasPrefix(candidate, "//") || strings.ContainsAny(candidate, "\r\n") {
-		return ""
-	}
-	parsed, err := url.Parse(candidate)
-	if err != nil || parsed.IsAbs() || parsed.Host != "" {
-		return ""
-	}
-	return parsed.RequestURI()
-}
-
-func validateRegistration(fullName, email, phone, password string) string {
-	if len([]rune(fullName)) < 2 || len([]rune(fullName)) > 100 {
-		return "Nama harus berisi 2 sampai 100 karakter."
-	}
-	address, err := mail.ParseAddress(email)
-	if err != nil || address.Address != email || len(email) > 254 {
-		return "Masukkan alamat email yang valid."
-	}
-	if len(phone) > 30 {
-		return "Nomor telepon terlalu panjang."
-	}
-	if len(password) < 8 || len(password) > 72 {
-		return "Password harus berisi 8 sampai 72 karakter."
-	}
-	return ""
 }
 
 func packageFeatures(packageID string) []string {

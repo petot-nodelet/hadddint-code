@@ -1,0 +1,333 @@
+package web
+
+import (
+	"fmt"
+	"net/url"
+
+	"github.com/sukamoto/app/internal/storage"
+)
+
+type OrderCheckoutData struct {
+	Page           PageData
+	Order          storage.GuestOrder
+	PaymentMethods []storage.PaymentMethod
+	Error          string
+}
+
+type TrackingPageData struct {
+	Page  PageData
+	Code  string
+	Error string
+	Order *storage.TrackedOrder
+}
+
+type AdminOrdersPageData struct {
+	Page          PageData
+	Orders        []storage.AdminOrder
+	Search        string
+	PaymentStatus string
+	WorkStatus    string
+}
+
+type AdminOrderPageData struct {
+	Page  PageData
+	Order storage.AdminOrder
+	Error string
+}
+
+templ OrderCheckoutPage(data OrderCheckoutData) {
+	@Layout(data.Page, orderCheckoutContent(data))
+}
+
+templ orderCheckoutContent(data OrderCheckoutData) {
+	<section class="mx-auto max-w-3xl px-4 py-12 sm:px-6">
+		<p class="text-xs font-semibold uppercase tracking-[0.3em] text-gold">Pesanan SUKAMOTO</p>
+		<h1 class="mt-3 font-serif text-3xl">Ringkasan &amp; pembayaran</h1>
+		if data.Error != "" {
+			<p role="alert" class="mt-5 rounded-lg border border-red-900 bg-red-950/50 p-3 text-sm text-red-200">{ data.Error }</p>
+		}
+		<div class="card mt-7 space-y-4 p-5 sm:p-7">
+			<div class="flex flex-wrap items-start justify-between gap-4">
+				<div>
+					<p class="text-xs uppercase tracking-widest text-ink-muted">Nomor pesanan</p>
+					<p class="mt-1 font-semibold">{ data.Order.OrderNumber }</p>
+				</div>
+				<div>
+					<p class="text-xs uppercase tracking-widest text-ink-muted">Kode pelacakan</p>
+					<p class="mt-1 font-semibold text-gold">{ data.Order.TrackingCode }</p>
+				</div>
+			</div>
+			<div class="border-t border-line pt-4">
+				<p class="font-serif text-xl">{ data.Order.PublicName }</p>
+				<p class="mt-1 text-sm text-ink-muted">{ data.Order.TemplateName } · Paket { data.Order.PackageName }</p>
+				<p class="mt-3 text-xl font-semibold">{ FormatIDR(data.Order.PriceCents) }</p>
+			</div>
+			<p class="text-sm text-ink-muted">Simpan kode pelacakan untuk melihat perkembangan pesanan dari perangkat lain. Kode ini hanya untuk melihat status, bukan untuk mengubah data atau mengirim bukti pembayaran.</p>
+			<a href={ templ.SafeURL("/track/" + url.PathEscape(data.Order.TrackingCode)) } class="text-sm text-gold hover:underline">Buka halaman pelacakan</a>
+		</div>
+		if data.Order.PaymentStatus == "payment_submitted" {
+			<div class="card mt-6 p-5">
+				<h2 class="font-serif text-2xl">Bukti pembayaran sedang diperiksa</h2>
+				<p class="mt-2 text-sm text-ink-muted">Kami akan memperbarui status pesanan setelah admin menyelesaikan pemeriksaan.</p>
+			</div>
+		} else if data.Order.PaymentStatus == "paid" {
+			<div class="card mt-6 p-5">
+				<h2 class="font-serif text-2xl">Pembayaran terverifikasi</h2>
+				<p class="mt-2 text-sm text-ink-muted">Pesanan Anda akan diproses. Pantau status melalui kode pelacakan.</p>
+			</div>
+		} else if data.Order.PaymentStatus == "payment_rejected" {
+			<div class="card mt-6 p-5">
+				<h2 class="font-serif text-2xl">Bukti pembayaran perlu diperbaiki</h2>
+				<p class="mt-2 text-sm text-ink-muted">Silakan periksa kembali pembayaran dan kirim bukti yang sesuai.</p>
+				if data.Order.RejectReason != "" {
+					<p class="mt-3 text-sm">Catatan pemeriksaan: { data.Order.RejectReason }</p>
+				}
+			</div>
+			@paymentUploadForm(data)
+		} else if data.Order.PaymentStatus == "pending_payment" {
+			@paymentUploadForm(data)
+		}
+	</section>
+}
+
+templ paymentUploadForm(data OrderCheckoutData) {
+	<div class="card mt-6 p-5 sm:p-7">
+		<h2 class="font-serif text-2xl">Instruksi pembayaran</h2>
+		<p class="mt-2 text-sm leading-relaxed text-ink-muted">Pembayaran dilakukan secara manual. Pastikan nama penerima dan nominal sesuai sebelum mengirim.</p>
+		<form method="post" enctype="multipart/form-data" action={ templ.SafeURL("/orders/" + url.PathEscape(data.Order.OrderNumber) + "/payment") } class="mt-5 space-y-4">
+			<input type="hidden" name="csrf_token" value={ data.Page.CSRF }/>
+			<label class="form-label">
+				<span>Metode pembayaran</span>
+				<select class="form-input" name="payment_method_id" required>
+					<option value="">Pilih metode pembayaran</option>
+					for _, method := range data.PaymentMethods {
+						<option value={ method.ID }>{ method.Name }</option>
+					}
+				</select>
+			</label>
+			<div class="space-y-3">
+				for _, method := range data.PaymentMethods {
+					<details class="rounded-lg border border-line p-4">
+						<summary class="cursor-pointer font-semibold">{ method.Name }</summary>
+						if method.BankName != "" {
+							<p class="mt-3 text-sm">{ method.BankName } · { method.AccountNumber }</p>
+						}
+						if method.AccountHolder != "" {
+							<p class="mt-1 text-sm text-ink-muted">Atas nama { method.AccountHolder }</p>
+						}
+						<p class="mt-3 whitespace-pre-line text-sm text-ink-muted">{ method.Instructions }</p>
+					</details>
+				}
+			</div>
+			<p class="text-lg font-semibold">Total pembayaran: { FormatIDR(data.Order.PriceCents) }</p>
+			<label class="form-label">
+				<span>Unggah bukti pembayaran (JPG, PNG, atau WEBP; maks. 5 MB)</span>
+				<input class="form-input" type="file" name="payment_proof" accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp" required/>
+			</label>
+			<button class="btn btn-primary w-full" type="submit">Kirim bukti pembayaran</button>
+		</form>
+	</div>
+}
+
+templ TrackPage(data TrackingPageData) {
+	@Layout(data.Page, trackContent(data))
+}
+
+templ trackContent(data TrackingPageData) {
+	<section class="mx-auto max-w-2xl px-4 py-16 sm:px-6">
+		<div class="card p-6 sm:p-8">
+			<p class="text-xs font-semibold uppercase tracking-[0.3em] text-gold">Lacak pesanan</p>
+			<h1 class="mt-3 font-serif text-3xl">Cek status undangan Anda</h1>
+			<p class="mt-3 text-sm leading-relaxed text-ink-muted">Masukkan kode pelacakan yang diberikan setelah pesanan dibuat. Kode ini hanya menampilkan informasi status.</p>
+			if data.Error != "" {
+				<p role="alert" class="mt-5 rounded-lg border border-red-900 bg-red-950/50 p-3 text-sm text-red-200">{ data.Error }</p>
+			}
+			<form method="post" action="/track" class="mt-6 flex flex-col gap-3 sm:flex-row">
+				<input type="hidden" name="csrf_token" value={ data.Page.CSRF }/>
+				<label class="form-label flex-1">
+					<span>Kode pelacakan</span>
+					<input class="form-input uppercase" type="text" name="tracking_code" value={ data.Code } placeholder="SKM-7K9P-4X2M" required maxlength="13" autocomplete="off"/>
+				</label>
+				<button class="btn btn-primary sm:mt-6" type="submit">Cek Pesanan</button>
+			</form>
+		</div>
+		if data.Order != nil {
+			<div class="card mt-6 p-6 sm:p-8">
+				<p class="text-xs font-semibold uppercase tracking-widest text-gold">Status pesanan</p>
+				<h2 class="mt-2 font-serif text-2xl">{ data.Order.PublicName }</h2>
+				<p class="mt-2 text-sm text-ink-muted">{ data.Order.PackageName } · { data.Order.TemplateName }</p>
+				<p class="mt-4 text-sm">Nomor pesanan: <strong>{ data.Order.OrderNumber }</strong></p>
+				<p class="mt-1 text-sm">Dibuat: { data.Order.CreatedAt }</p>
+				<p class="mt-4 text-sm">Pembayaran: <strong class="text-gold">{ statusLabel(data.Order.PaymentStatus) }</strong></p>
+				<p class="mt-1 text-sm">Pengerjaan: <strong class="text-gold">{ statusLabel(data.Order.WorkStatus) }</strong></p>
+				<p class="mt-3 text-lg font-semibold">{ FormatIDR(data.Order.PriceCents) }</p>
+				if data.Order.PublicNote != "" {
+					<div class="mt-5 rounded-lg border border-line bg-sand p-4">
+						<p class="text-xs font-semibold uppercase tracking-widest text-gold">Catatan dari tim kami</p>
+						<p class="mt-2 whitespace-pre-line text-sm">{ data.Order.PublicNote }</p>
+					</div>
+				}
+				if data.Order.InvitationSlug != "" {
+					<a class="btn btn-primary mt-5 w-full" href={ templ.SafeURL("https://" + data.Order.InvitationSlug + ".invite.sukamoto.web.id") }>Buka undangan</a>
+				}
+			</div>
+		}
+	</section>
+}
+
+templ AdminOrdersPage(data AdminOrdersPageData) {
+	@Layout(data.Page, adminOrdersContent(data))
+}
+
+templ adminOrdersContent(data AdminOrdersPageData) {
+	<section class="mx-auto max-w-6xl px-4 py-12 sm:px-6">
+		<div class="flex flex-wrap items-end justify-between gap-4">
+			<div>
+				<p class="text-xs font-semibold uppercase tracking-[0.3em] text-gold">Area administrator</p>
+				<h1 class="mt-3 font-serif text-3xl">Pesanan</h1>
+			</div>
+			<a href="/admin" class="text-sm text-gold hover:underline">Dashboard</a>
+		</div>
+		<form method="get" action="/admin/orders" class="card mt-7 grid gap-3 p-4 sm:grid-cols-4">
+			<label class="form-label sm:col-span-2">
+				<span>Nomor pesanan atau kode pelacakan</span>
+				<input class="form-input" name="q" value={ data.Search } maxlength="100"/>
+			</label>
+			<label class="form-label">
+				<span>Status pembayaran</span>
+				<select class="form-input" name="payment_status">
+					<option value="">Semua</option>
+					<option value="pending_payment" selected?={ data.PaymentStatus == "pending_payment" }>Menunggu pembayaran</option>
+					<option value="payment_submitted" selected?={ data.PaymentStatus == "payment_submitted" }>Perlu diverifikasi</option>
+					<option value="payment_rejected" selected?={ data.PaymentStatus == "payment_rejected" }>Ditolak</option>
+					<option value="paid" selected?={ data.PaymentStatus == "paid" }>Lunas</option>
+				</select>
+			</label>
+			<label class="form-label">
+				<span>Status pengerjaan</span>
+				<select class="form-input" name="work_status">
+					<option value="">Semua</option>
+					<option value="draft" selected?={ data.WorkStatus == "draft" }>Draf</option>
+					<option value="waiting_payment" selected?={ data.WorkStatus == "waiting_payment" }>Menunggu pembayaran</option>
+					<option value="processing" selected?={ data.WorkStatus == "processing" }>Diproses</option>
+					<option value="published" selected?={ data.WorkStatus == "published" }>Terbit</option>
+					<option value="expired" selected?={ data.WorkStatus == "expired" }>Kedaluwarsa</option>
+					<option value="cancelled" selected?={ data.WorkStatus == "cancelled" }>Dibatalkan</option>
+				</select>
+			</label>
+			<div class="flex gap-2 sm:col-span-4 sm:justify-end">
+				<button type="submit" class="btn btn-primary">Cari</button>
+				<a href="/admin/orders" class="btn btn-outline">Reset</a>
+			</div>
+		</form>
+		if len(data.Orders) == 0 {
+			<div class="card mt-6 p-8 text-center">
+				<h2 class="font-serif text-xl">Belum ada pesanan yang cocok</h2>
+			</div>
+		} else {
+			<div class="card mt-6 overflow-x-auto">
+				<table class="w-full min-w-[760px] text-left text-sm">
+					<thead class="border-b border-line text-xs uppercase tracking-widest text-ink-muted">
+						<tr><th class="p-4">Pesanan</th><th class="p-4">Pelanggan</th><th class="p-4">Paket / template</th><th class="p-4">Pembayaran</th><th class="p-4">Pengerjaan</th></tr>
+					</thead>
+					<tbody>
+						for _, order := range data.Orders {
+							<tr class="border-b border-line last:border-0">
+								<td class="p-4"><a class="font-semibold text-gold hover:underline" href={ templ.SafeURL("/admin/orders/" + url.PathEscape(order.OrderNumber)) }>{ order.OrderNumber }</a><p class="mt-1 text-xs text-ink-muted">{ order.TrackingCode }</p></td>
+								<td class="p-4">{ order.CustomerName }</td>
+								<td class="p-4">{ order.PackageName }<p class="mt-1 text-xs text-ink-muted">{ order.TemplateName }</p></td>
+								<td class="p-4">{ statusLabel(order.PaymentStatus) }</td>
+								<td class="p-4">{ statusLabel(order.WorkStatus) }</td>
+							</tr>
+						}
+					</tbody>
+				</table>
+			</div>
+		}
+	</section>
+}
+
+templ AdminOrderDetailPage(data AdminOrderPageData) {
+	@Layout(data.Page, adminOrderDetailContent(data))
+}
+
+templ adminOrderDetailContent(data AdminOrderPageData) {
+	<section class="mx-auto max-w-4xl px-4 py-12 sm:px-6">
+		<a href="/admin/orders" class="text-sm text-gold hover:underline">← Kembali ke pesanan</a>
+		<p class="mt-6 text-xs font-semibold uppercase tracking-[0.3em] text-gold">Detail pesanan</p>
+		<h1 class="mt-2 font-serif text-3xl">{ data.Order.OrderNumber }</h1>
+		if data.Error != "" {
+			<p role="alert" class="mt-5 rounded-lg border border-red-900 bg-red-950/50 p-3 text-sm text-red-200">{ data.Error }</p>
+		}
+		<div class="card mt-6 grid gap-6 p-5 sm:grid-cols-2 sm:p-7">
+			<div>
+				<h2 class="font-serif text-xl">Pelanggan</h2>
+				<p class="mt-3 text-sm">{ data.Order.CustomerName }</p>
+				<p class="mt-1 break-all text-sm text-ink-muted">{ data.Order.CustomerContact }</p>
+				<p class="mt-3 text-sm">Nama publik: { data.Order.PublicName }</p>
+			</div>
+			<div>
+				<h2 class="font-serif text-xl">Pilihan pesanan</h2>
+				<p class="mt-3 text-sm">{ data.Order.PackageName } · { data.Order.TemplateName }</p>
+				<p class="mt-2 text-lg font-semibold">{ FormatIDR(data.Order.PriceCents) }</p>
+				<p class="mt-2 text-sm">Pembayaran: { statusLabel(data.Order.PaymentStatus) }</p>
+				<p class="mt-1 text-sm">Pengerjaan: { statusLabel(data.Order.WorkStatus) }</p>
+				<p class="mt-3 text-sm text-ink-muted">Kode tracking: { data.Order.TrackingCode }</p>
+			</div>
+		</div>
+		if data.Order.PaymentID > 0 {
+			<div class="card mt-6 p-5 sm:p-7">
+				<h2 class="font-serif text-2xl">Pembayaran</h2>
+				<p class="mt-2 text-sm">{ data.Order.PaymentMethodName } · { data.Order.PaymentRecordStatus }</p>
+				if data.Order.ProofStoredName != "" {
+					<a href={ templ.SafeURL(fmt.Sprintf("/admin/payments/%d/proof", data.Order.PaymentID)) } class="mt-4 inline-block text-sm text-gold hover:underline">Lihat bukti pembayaran</a>
+					<img src={ templ.SafeURL(fmt.Sprintf("/admin/payments/%d/proof", data.Order.PaymentID)) } alt="Bukti pembayaran" class="mt-4 max-h-96 rounded-lg border border-line object-contain"/>
+				}
+				if data.Order.PaymentStatus == "payment_submitted" {
+					<div class="mt-5 flex flex-wrap gap-3">
+						<form method="post" action={ templ.SafeURL(fmt.Sprintf("/admin/payments/%d/approve", data.Order.PaymentID)) }>
+							<input type="hidden" name="csrf_token" value={ data.Page.CSRF }/>
+							<button class="btn btn-primary" type="submit">Setujui pembayaran</button>
+						</form>
+						<form method="post" action={ templ.SafeURL(fmt.Sprintf("/admin/payments/%d/reject", data.Order.PaymentID)) } class="flex flex-1 flex-col gap-2 sm:flex-row">
+							<input type="hidden" name="csrf_token" value={ data.Page.CSRF }/>
+							<input class="form-input" name="reason" required maxlength="500" placeholder="Alasan penolakan"/>
+							<button class="btn btn-outline" type="submit">Tolak</button>
+						</form>
+					</div>
+				} else if data.Order.RejectReason != "" {
+					<p class="mt-4 text-sm text-ink-muted">Alasan penolakan: { data.Order.RejectReason }</p>
+				}
+			</div>
+		}
+		<div class="card mt-6 p-5 sm:p-7">
+			<h2 class="font-serif text-2xl">Catatan pesanan</h2>
+			<form method="post" action={ templ.SafeURL("/admin/orders/" + url.PathEscape(data.Order.OrderNumber) + "/notes") } class="mt-4 space-y-4">
+				<input type="hidden" name="csrf_token" value={ data.Page.CSRF }/>
+				<label class="form-label">
+					<span>Catatan untuk pelanggan</span>
+					<textarea class="form-input min-h-24" name="public_note" maxlength="1000">{ data.Order.PublicNote }</textarea>
+				</label>
+				<label class="form-label">
+					<span>Catatan internal admin</span>
+					<textarea class="form-input min-h-24" name="internal_note" maxlength="2000">{ data.Order.InternalNote }</textarea>
+				</label>
+				<button class="btn btn-primary" type="submit">Simpan catatan</button>
+			</form>
+			if data.Order.PaymentStatus != "paid" && (data.Order.WorkStatus == "draft" || data.Order.WorkStatus == "waiting_payment") {
+				<form method="post" action={ templ.SafeURL("/admin/orders/" + url.PathEscape(data.Order.OrderNumber) + "/status") } class="mt-6 flex flex-col gap-3 border-t border-line pt-5 sm:flex-row">
+					<input type="hidden" name="csrf_token" value={ data.Page.CSRF }/>
+					<label class="form-label flex-1">
+						<span>Ubah status pengerjaan</span>
+						<select class="form-input" name="work_status" required>
+							<option value="">Pilih status</option>
+							<option value="cancelled">Batalkan pesanan</option>
+							<option value="expired">Tandai kedaluwarsa</option>
+						</select>
+					</label>
+					<button class="btn btn-outline sm:mt-6" type="submit">Simpan status</button>
+				</form>
+			}
+		</div>
+	</section>
+}

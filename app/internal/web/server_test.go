@@ -1,14 +1,25 @@
 package web
 
 import (
+	"bytes"
 	"context"
+	"database/sql"
+	"errors"
 	"fmt"
+	"image"
+	"image/color"
+	"image/png"
 	"io"
+	"mime/multipart"
 	"net/http"
 	"net/http/cookiejar"
 	"net/http/httptest"
+	"net/textproto"
 	"net/url"
+	"os"
+	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -19,10 +30,12 @@ import (
 
 var csrfInput = regexp.MustCompile(`name="csrf_token" value="([a-f0-9]{64})"`)
 var nextInput = regexp.MustCompile(`name="next" value="([^"]*)"`)
+var testOrderNumber = regexp.MustCompile(`SKM-ORD-[0-9]{8}-[A-Z2-7]{8}`)
+var testTrackingCode = regexp.MustCompile(`SKM-[A-Z2-7]{4}-[A-Z2-7]{4}`)
 
 func testServer(t *testing.T) (*storage.DB, *httptest.Server) {
 	t.Helper()
-	db, err := storage.Open(context.Background(), t.TempDir()+"/test.db")
+	db, err := storage.OpenWithUploads(context.Background(), t.TempDir()+"/test.db", t.TempDir()+"/uploads")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -85,54 +98,118 @@ func postForm(t *testing.T, client *http.Client, target string, values url.Value
 	return response
 }
 
-func TestCustomerRegistrationSessionRefreshAndLogout(t *testing.T) {
+func readBody(t *testing.T, response *http.Response) string {
+	t.Helper()
+	body, err := io.ReadAll(response.Body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(body)
+}
+
+func createGuestOrderForTest(t *testing.T, client *http.Client, server *httptest.Server, templateID, packageID string) (string, string, string) {
+	t.Helper()
+	path := "/templates/" + templateID + "/use?package=" + url.QueryEscape(packageID)
+	csrf := getCSRF(t, client, server.URL+path)
+	response := postForm(t, client, server.URL+"/templates/"+templateID+"/use", url.Values{
+		"csrf_token":       {csrf},
+		"package_id":       {packageID},
+		"customer_name":    {"Private Customer"},
+		"customer_contact": {"private@example.com"},
+		"public_name":      {"Ayu & Bayu"},
+	})
+	body := readBody(t, response)
+	response.Body.Close()
+	if response.StatusCode != http.StatusOK {
+		t.Fatalf("guest order checkout status = %d, want 200: %s", response.StatusCode, body)
+	}
+	orderMatch := testOrderNumber.FindString(response.Request.URL.Path)
+	if orderMatch == "" {
+		t.Fatalf("checkout URL has no generated order number: %s", response.Request.URL)
+	}
+	trackingMatch := testTrackingCode.FindString(body)
+	if trackingMatch == "" {
+		t.Fatalf("checkout page has no tracking code: %s", body)
+	}
+	return orderMatch, trackingMatch, body
+}
+
+func validPNG(t *testing.T) []byte {
+	t.Helper()
+	img := image.NewRGBA(image.Rect(0, 0, 2, 2))
+	img.Set(0, 0, color.RGBA{R: 255, A: 255})
+	var data bytes.Buffer
+	if err := png.Encode(&data, img); err != nil {
+		t.Fatal(err)
+	}
+	return data.Bytes()
+}
+
+func postPaymentProof(t *testing.T, client *http.Client, target, csrf, method, filename, contentType string, data []byte) *http.Response {
+	t.Helper()
+	var body bytes.Buffer
+	writer := multipart.NewWriter(&body)
+	if err := writer.WriteField("csrf_token", csrf); err != nil {
+		t.Fatal(err)
+	}
+	if err := writer.WriteField("payment_method_id", method); err != nil {
+		t.Fatal(err)
+	}
+	header := make(textproto.MIMEHeader)
+	header.Set("Content-Disposition", `form-data; name="payment_proof"; filename="`+filename+`"`)
+	header.Set("Content-Type", contentType)
+	part, err := writer.CreatePart(header)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := part.Write(data); err != nil {
+		t.Fatal(err)
+	}
+	if err := writer.Close(); err != nil {
+		t.Fatal(err)
+	}
+	request, err := http.NewRequest(http.MethodPost, target, &body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	request.Header.Set("Content-Type", writer.FormDataContentType())
+	response, err := client.Do(request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return response
+}
+
+func TestCustomerAccountRoutesAreDeprecated(t *testing.T) {
 	_, server := testServer(t)
 	client := newTestClient(t)
-	csrf := getCSRF(t, client, server.URL+"/register")
-
-	response := postForm(t, client, server.URL+"/register", url.Values{
-		"csrf_token": {csrf},
-		"full_name":  {"Senja Test"},
-		"email":      {"senja@example.com"},
-		"phone":      {"08123456789"},
-		"password":   {"strong-password"},
-	})
-	response.Body.Close()
-	if response.StatusCode != http.StatusOK {
-		t.Fatalf("registration redirect target status = %d, want dashboard 200", response.StatusCode)
+	for _, path := range []string{"/register", "/dashboard"} {
+		response, err := client.Get(server.URL + path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		response.Body.Close()
+		if response.StatusCode != http.StatusGone {
+			t.Errorf("GET %s status = %d, want 410", path, response.StatusCode)
+		}
 	}
-	if !strings.HasSuffix(response.Request.URL.Path, "/dashboard") {
-		t.Fatalf("registration ended at %s, want /dashboard", response.Request.URL.Path)
-	}
-	response, err := client.Get(server.URL + "/dashboard")
+	response, err := client.Get(server.URL + "/login")
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer response.Body.Close()
-	if response.StatusCode != http.StatusOK {
-		t.Fatalf("dashboard refresh status = %d, want 200", response.StatusCode)
+	if response.StatusCode != http.StatusOK || response.Request.URL.Path != "/admin/login" {
+		t.Fatalf("legacy login URL ended at %s with status %d, want admin login 200", response.Request.URL, response.StatusCode)
 	}
-
-	logoutCSRF := getCSRF(t, client, server.URL+"/login")
-	response = postForm(t, client, server.URL+"/logout", url.Values{"csrf_token": {logoutCSRF}})
-	response.Body.Close()
-	if response.StatusCode != http.StatusOK || !strings.HasSuffix(response.Request.URL.Path, "/") {
-		t.Fatalf("logout redirect result = %d %s, want home 200", response.StatusCode, response.Request.URL.Path)
-	}
-	response, err = client.Get(server.URL + "/dashboard")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer response.Body.Close()
-	if !strings.HasSuffix(response.Request.URL.Path, "/login") {
-		t.Fatalf("dashboard after logout ended at %s, want login redirect", response.Request.URL.Path)
+	if strings.Contains(strings.ToLower(readBody(t, response)), "daftar") {
+		t.Fatal("admin login page exposes customer registration")
 	}
 }
 
 func TestLoginRejectsInvalidCSRF(t *testing.T) {
 	_, server := testServer(t)
 	client := newTestClient(t)
-	response, err := client.PostForm(server.URL+"/login", url.Values{
+	response, err := client.PostForm(server.URL+"/admin/login", url.Values{
 		"csrf_token": {"invalid"},
 		"email":      {"a@example.com"},
 		"password":   {"password"},
@@ -167,16 +244,13 @@ func TestAuthenticationAndRoleSeparation(t *testing.T) {
 	}
 
 	customerClient := newTestClient(t)
-	if err := login(t, customerClient, server.URL, "customer@example.com", "customer-password"); err != nil {
-		t.Fatal(err)
-	}
-	response, err := customerClient.Get(server.URL + "/admin")
-	if err != nil {
-		t.Fatal(err)
-	}
+	customerCSRF := getCSRF(t, customerClient, server.URL+"/admin/login")
+	response := postForm(t, customerClient, server.URL+"/admin/login", url.Values{
+		"csrf_token": {customerCSRF}, "email": {"customer@example.com"}, "password": {"customer-password"},
+	})
 	response.Body.Close()
-	if response.StatusCode != http.StatusForbidden {
-		t.Fatalf("customer access to admin returned %d, want 403", response.StatusCode)
+	if response.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("customer credentials at admin login returned %d, want 401", response.StatusCode)
 	}
 
 	adminClient := newTestClient(t)
@@ -196,8 +270,8 @@ func TestAuthenticationAndRoleSeparation(t *testing.T) {
 		t.Fatal(err)
 	}
 	response.Body.Close()
-	if response.StatusCode != http.StatusForbidden {
-		t.Fatalf("admin access to customer dashboard returned %d, want 403", response.StatusCode)
+	if response.StatusCode != http.StatusGone {
+		t.Fatalf("legacy customer dashboard returned %d, want 410", response.StatusCode)
 	}
 
 	if adminID == customerID {
@@ -207,8 +281,8 @@ func TestAuthenticationAndRoleSeparation(t *testing.T) {
 
 func login(t *testing.T, client *http.Client, baseURL, email, password string) error {
 	t.Helper()
-	csrf := getCSRF(t, client, baseURL+"/login")
-	response, err := client.PostForm(baseURL+"/login", url.Values{
+	csrf := getCSRF(t, client, baseURL+"/admin/login")
+	response, err := client.PostForm(baseURL+"/admin/login", url.Values{
 		"csrf_token": {csrf},
 		"email":      {email},
 		"password":   {password},
@@ -225,7 +299,7 @@ func login(t *testing.T, client *http.Client, baseURL, email, password string) e
 
 func TestLoginSessionCookieIsHttpOnly(t *testing.T) {
 	_, server := testServer(t)
-	response, err := http.Get(server.URL + "/login")
+	response, err := http.Get(server.URL + "/admin/login")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -353,16 +427,7 @@ func TestTemplateCatalogFiltersSortingAndPagination(t *testing.T) {
 }
 
 func TestTemplatePreviewAndPackageAwareSelection(t *testing.T) {
-	db, server := testServer(t)
-	ctx := context.Background()
-	passwordHash, err := auth.HashPassword("customer-password")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := db.CreateUser(ctx, "Customer", "template@example.com", "", passwordHash, auth.RoleCustomer); err != nil {
-		t.Fatal(err)
-	}
-
+	_, server := testServer(t)
 	client := newTestClient(t)
 	response, err := client.Get(server.URL + "/templates/G01")
 	if err != nil {
@@ -381,71 +446,311 @@ func TestTemplatePreviewAndPackageAwareSelection(t *testing.T) {
 			t.Errorf("template detail/renderer missing %q", expected)
 		}
 	}
+}
 
-	csrf := getCSRF(t, client, server.URL+"/templates/G01")
-	response = postForm(t, client, server.URL+"/templates/G01/use", url.Values{
-		"csrf_token": {csrf}, "package_id": {"gold"},
-	})
-	unauthenticatedHTML, err := io.ReadAll(response.Body)
+func loginTestAdmin(t *testing.T, db *storage.DB, server *httptest.Server, client *http.Client) int64 {
+	t.Helper()
+	hash, err := auth.HashPassword("admin-password")
+	if err != nil {
+		t.Fatal(err)
+	}
+	adminID, err := db.CreateUser(context.Background(), "Admin", "admin@example.com", "", hash, auth.RoleAdmin)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := login(t, client, server.URL, "admin@example.com", "admin-password"); err != nil {
+		t.Fatal(err)
+	}
+	return adminID
+}
+
+func TestGuestPaymentUploadAndAdminReview(t *testing.T) {
+	db, server := testServer(t)
+	customer := newTestClient(t)
+	orderNumber, _, _ := createGuestOrderForTest(t, customer, server, "S01", "silver")
+	csrf := getCSRF(t, customer, server.URL+"/orders/"+orderNumber)
+	proof := validPNG(t)
+	response := postPaymentProof(t, customer, server.URL+"/orders/"+orderNumber+"/payment",
+		csrf, "bank_transfer", "../../receipt.png", "image/png", proof)
+	body := readBody(t, response)
+	response.Body.Close()
+	if response.StatusCode != http.StatusOK || !strings.Contains(body, "sedang diperiksa") {
+		t.Fatalf("valid payment proof submission status = %d, body = %s", response.StatusCode, body)
+	}
+
+	var paymentID int64
+	var paymentStatus, storedName, storedMIME string
+	var fileSize int64
+	var paymentUserID sql.NullInt64
+	if err := db.SQL.QueryRow(`SELECT id, status, proof_stored_name, proof_mime_type, proof_size_bytes, user_id FROM payments WHERE order_id = (SELECT id FROM orders WHERE order_number = ?)`, orderNumber).Scan(&paymentID, &paymentStatus, &storedName, &storedMIME, &fileSize, &paymentUserID); err != nil {
+		t.Fatal(err)
+	}
+	if paymentStatus != "payment_submitted" || storedMIME != "image/png" || fileSize != int64(len(proof)) || paymentUserID.Valid {
+		t.Fatalf("payment metadata status=%s MIME=%s size=%d user=%v", paymentStatus, storedMIME, fileSize, paymentUserID)
+	}
+	if !proofStoredNamePattern.MatchString(storedName) {
+		t.Fatalf("stored proof name is not random and path-safe: %q", storedName)
+	}
+	proofPath := filepath.Join(db.UploadDir, storedName)
+	stat, err := os.Stat(proofPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if stat.Mode().Perm() != 0o600 {
+		t.Fatalf("payment proof permissions = %o, want 600", stat.Mode().Perm())
+	}
+
+	unauthorized := newTestClient(t)
+	response, err = unauthorized.Get(server.URL + "/admin/payments/" + strconv.FormatInt(paymentID, 10) + "/proof")
+	if err != nil {
+		t.Fatal(err)
+	}
+	response.Body.Close()
+	if response.Request.URL.Path != "/admin/login" {
+		t.Fatalf("unauthorized proof request ended at %s, want admin login", response.Request.URL)
+	}
+
+	admin := newTestClient(t)
+	adminID := loginTestAdmin(t, db, server, admin)
+	response, err = admin.Get(server.URL + "/admin/payments/" + strconv.FormatInt(paymentID, 10) + "/proof")
+	if err != nil {
+		t.Fatal(err)
+	}
+	adminProof, err := io.ReadAll(response.Body)
 	response.Body.Close()
 	if err != nil {
 		t.Fatal(err)
 	}
-	if response.StatusCode != http.StatusOK || !strings.HasSuffix(response.Request.URL.Path, "/login") {
-		t.Fatalf("anonymous template selection ended at %s with status %d", response.Request.URL, response.StatusCode)
+	if response.StatusCode != http.StatusOK || response.Header.Get("Content-Type") != "image/png" || !bytes.Equal(adminProof, proof) {
+		t.Fatalf("admin proof response status=%d type=%q", response.StatusCode, response.Header.Get("Content-Type"))
 	}
-	next := response.Request.URL.Query().Get("next")
-	if next != "/templates/G01/use?package=gold" {
-		t.Fatalf("template selection return path = %q", next)
-	}
-	if !strings.Contains(string(unauthenticatedHTML), `name="next"`) {
-		t.Fatal("login form did not preserve the requested template choice")
-	}
-	loginCSRF := getCSRF(t, client, response.Request.URL.String())
-	response = postForm(t, client, server.URL+"/login", url.Values{
-		"csrf_token": {loginCSRF},
-		"email":      {"template@example.com"},
-		"password":   {"customer-password"},
-		"next":       {next},
+
+	guestCSRF := getCSRF(t, customer, server.URL+"/track")
+	response = postForm(t, customer, server.URL+"/admin/payments/"+strconv.FormatInt(paymentID, 10)+"/approve", url.Values{
+		"csrf_token": {guestCSRF},
 	})
-	confirmation, err := io.ReadAll(response.Body)
 	response.Body.Close()
+	if response.Request.URL.Path != "/admin/login" {
+		t.Fatalf("unauthenticated payment review ended at %s, want admin login", response.Request.URL)
+	}
+
+	adminCSRF := getCSRF(t, admin, server.URL+"/admin/orders/"+orderNumber)
+	response = postForm(t, admin, server.URL+"/admin/payments/"+strconv.FormatInt(paymentID, 10)+"/approve", url.Values{
+		"csrf_token": {adminCSRF},
+	})
+	response.Body.Close()
+	if response.StatusCode != http.StatusOK || !strings.HasSuffix(response.Request.URL.Path, "/admin/orders/"+orderNumber) {
+		t.Fatalf("payment approval ended at %s with status %d", response.Request.URL, response.StatusCode)
+	}
+	var orderPaymentStatus, workStatus string
+	if err := db.SQL.QueryRow(`SELECT payment_status, work_status FROM orders WHERE order_number = ?`, orderNumber).Scan(&orderPaymentStatus, &workStatus); err != nil {
+		t.Fatal(err)
+	}
+	if orderPaymentStatus != "paid" || workStatus != "processing" {
+		t.Fatalf("approved order states = payment:%s work:%s", orderPaymentStatus, workStatus)
+	}
+	var reviewCount int
+	if err := db.SQL.QueryRow(`SELECT count(*) FROM payment_reviews WHERE payment_id = ? AND decision = 'approved' AND admin_id = ?`, paymentID, adminID).Scan(&reviewCount); err != nil {
+		t.Fatal(err)
+	}
+	if reviewCount != 1 {
+		t.Fatalf("approved review records = %d, want 1", reviewCount)
+	}
+	response = postForm(t, admin, server.URL+"/admin/payments/"+strconv.FormatInt(paymentID, 10)+"/approve", url.Values{
+		"csrf_token": {adminCSRF},
+	})
+	response.Body.Close()
+	if response.StatusCode != http.StatusConflict {
+		t.Fatalf("double approval returned %d, want 409", response.StatusCode)
+	}
+}
+
+func TestRejectedPaymentCanBeResubmitted(t *testing.T) {
+	db, server := testServer(t)
+	customer := newTestClient(t)
+	orderNumber, _, _ := createGuestOrderForTest(t, customer, server, "S01", "silver")
+	csrf := getCSRF(t, customer, server.URL+"/orders/"+orderNumber)
+	response := postPaymentProof(t, customer, server.URL+"/orders/"+orderNumber+"/payment",
+		csrf, "bank_transfer", "proof.png", "image/png", validPNG(t))
+	response.Body.Close()
+	if response.StatusCode != http.StatusOK {
+		t.Fatalf("initial proof upload status = %d", response.StatusCode)
+	}
+	var paymentID int64
+	var firstStoredName string
+	if err := db.SQL.QueryRow(`SELECT id, proof_stored_name FROM payments WHERE order_id = (SELECT id FROM orders WHERE order_number = ?)`, orderNumber).Scan(&paymentID, &firstStoredName); err != nil {
+		t.Fatal(err)
+	}
+
+	admin := newTestClient(t)
+	loginTestAdmin(t, db, server, admin)
+	adminCSRF := getCSRF(t, admin, server.URL+"/admin/orders/"+orderNumber)
+	response = postForm(t, admin, server.URL+"/admin/payments/"+strconv.FormatInt(paymentID, 10)+"/reject", url.Values{
+		"csrf_token": {adminCSRF}, "reason": {"Nominal pembayaran belum sesuai."},
+	})
+	response.Body.Close()
+	if response.StatusCode != http.StatusOK {
+		t.Fatalf("payment rejection status = %d", response.StatusCode)
+	}
+
+	checkoutCSRF := getCSRF(t, customer, server.URL+"/orders/"+orderNumber)
+	checkout, err := customer.Get(server.URL + "/orders/" + orderNumber)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if response.StatusCode != http.StatusOK || !strings.HasSuffix(response.Request.URL.Path, "/templates/G01/use") || !strings.Contains(string(confirmation), "Konfirmasi pilihan Anda") {
-		t.Fatalf("login did not resume template selection: %s (%d)", response.Request.URL, response.StatusCode)
+	checkoutBody := readBody(t, checkout)
+	checkout.Body.Close()
+	if !strings.Contains(checkoutBody, "Nominal pembayaran belum sesuai") {
+		t.Fatal("checkout did not show the rejection reason")
 	}
+	response = postPaymentProof(t, customer, server.URL+"/orders/"+orderNumber+"/payment",
+		checkoutCSRF, "qris", "second-proof.png", "image/png", validPNG(t))
+	response.Body.Close()
+	if response.StatusCode != http.StatusOK {
+		t.Fatalf("payment proof reupload status = %d", response.StatusCode)
+	}
+	if _, err := os.Stat(filepath.Join(db.UploadDir, firstStoredName)); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("replaced proof still exists or stat failed: %v", err)
+	}
+	var paymentStatus, orderPaymentStatus, workStatus string
+	var newStoredName string
+	if err := db.SQL.QueryRow(`SELECT pay.status, pay.proof_stored_name, o.payment_status, o.work_status FROM payments AS pay JOIN orders AS o ON o.id = pay.order_id WHERE o.order_number = ?`, orderNumber).Scan(&paymentStatus, &newStoredName, &orderPaymentStatus, &workStatus); err != nil {
+		t.Fatal(err)
+	}
+	if paymentStatus != "payment_submitted" || orderPaymentStatus != "payment_submitted" || workStatus != "waiting_payment" || newStoredName == firstStoredName {
+		t.Fatalf("reupload states payment=%s order_payment=%s work=%s", paymentStatus, orderPaymentStatus, workStatus)
+	}
+	var rejectionCount int
+	if err := db.SQL.QueryRow(`SELECT count(*) FROM payment_reviews WHERE payment_id = ? AND decision = 'rejected'`, paymentID).Scan(&rejectionCount); err != nil {
+		t.Fatal(err)
+	}
+	if rejectionCount != 1 {
+		t.Fatalf("rejection audit records = %d, want 1", rejectionCount)
+	}
+}
 
-	csrf = getCSRF(t, client, response.Request.URL.String())
-	response = postForm(t, client, server.URL+"/templates/G01/use", url.Values{
+func TestPaymentProofRejectsInvalidFilesAndOversize(t *testing.T) {
+	db, server := testServer(t)
+	customer := newTestClient(t)
+	orderNumber, _, _ := createGuestOrderForTest(t, customer, server, "S01", "silver")
+	csrf := getCSRF(t, customer, server.URL+"/orders/"+orderNumber)
+	tests := []struct {
+		name        string
+		filename    string
+		contentType string
+		data        []byte
+		wantStatus  int
+	}{
+		{name: "unsupported extension", filename: "proof.exe", contentType: "application/octet-stream", data: []byte("not an image"), wantStatus: http.StatusBadRequest},
+		{name: "MIME mismatch", filename: "proof.png", contentType: "image/jpeg", data: validPNG(t), wantStatus: http.StatusBadRequest},
+		{name: "invalid signature", filename: "proof.png", contentType: "image/png", data: []byte("not an image"), wantStatus: http.StatusBadRequest},
+		{name: "oversized image", filename: "large.png", contentType: "image/png", data: append(validPNG(t), bytes.Repeat([]byte{0}, maxPaymentProofSize)...), wantStatus: http.StatusRequestEntityTooLarge},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			response := postPaymentProof(t, customer, server.URL+"/orders/"+orderNumber+"/payment",
+				csrf, "bank_transfer", test.filename, test.contentType, test.data)
+			response.Body.Close()
+			if response.StatusCode != test.wantStatus {
+				t.Fatalf("upload status = %d, want %d", response.StatusCode, test.wantStatus)
+			}
+		})
+	}
+	var paymentCount int
+	if err := db.SQL.QueryRow(`SELECT count(*) FROM payments`).Scan(&paymentCount); err != nil {
+		t.Fatal(err)
+	}
+	if paymentCount != 0 {
+		t.Fatalf("invalid proof uploads created %d payment records", paymentCount)
+	}
+	entries, err := os.ReadDir(db.UploadDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) != 0 {
+		t.Fatalf("invalid proof uploads left %d files in private storage", len(entries))
+	}
+}
+
+func TestGuestOrderCreationAndTracking(t *testing.T) {
+	db, server := testServer(t)
+	client := newTestClient(t)
+
+	csrf := getCSRF(t, client, server.URL+"/templates/G01/use?package=gold")
+	response := postForm(t, client, server.URL+"/templates/G01/use", url.Values{
 		"csrf_token": {csrf}, "package_id": {"silver"},
+		"customer_name": {"Senja Tester"}, "customer_contact": {"senja@example.com"},
+		"public_name": {"Raka & Senja"},
 	})
+	invalidSelection := readBody(t, response)
 	response.Body.Close()
-	if response.StatusCode != http.StatusBadRequest {
-		t.Fatalf("unsupported Silver package selection returned %d, want 400", response.StatusCode)
+	if response.StatusCode != http.StatusBadRequest || !strings.Contains(invalidSelection, "tidak didukung") {
+		t.Fatalf("unsupported package selection returned %d and %q", response.StatusCode, invalidSelection)
 	}
-
 	response = postForm(t, client, server.URL+"/templates/G01/use", url.Values{
 		"csrf_token": {csrf}, "package_id": {"gold"},
+		"customer_name": {"Senja Tester"}, "customer_contact": {"senja@example.com"},
+		"public_name": {"Raka & Senja"},
 	})
-	dashboard, err := io.ReadAll(response.Body)
+	checkout, err := io.ReadAll(response.Body)
 	response.Body.Close()
 	if err != nil {
 		t.Fatal(err)
 	}
-	if response.StatusCode != http.StatusOK || !strings.HasSuffix(response.Request.URL.Path, "/dashboard") {
-		t.Fatalf("valid package selection did not reach dashboard: %s (%d)", response.Request.URL, response.StatusCode)
+	if response.StatusCode != http.StatusOK || !strings.HasPrefix(response.Request.URL.Path, "/orders/SKM-ORD-") {
+		t.Fatalf("valid guest order did not reach checkout: %s (%d)", response.Request.URL, response.StatusCode)
 	}
-	if !strings.Contains(string(dashboard), "Pilihan tersimpan") || !strings.Contains(string(dashboard), "Golden Kirana") || !strings.Contains(string(dashboard), "Gold") {
-		t.Fatal("dashboard did not show the saved template order")
+	if !strings.Contains(string(checkout), "Golden Kirana") || !strings.Contains(string(checkout), "Gold") || !strings.Contains(string(checkout), "Kode pelacakan") {
+		t.Fatal("checkout did not show the selected template, package, and tracking code")
 	}
-	var selectedPackage, selectedTemplate string
-	if err := db.SQL.QueryRow(`SELECT package_id, template_id FROM orders WHERE user_id = (SELECT id FROM users WHERE email = ?)`, "template@example.com").Scan(&selectedPackage, &selectedTemplate); err != nil {
+	var selectedPackage, selectedTemplate, orderNumber, trackingCode, paymentStatus, workStatus string
+	var selectedPrice int64
+	var userID sql.NullInt64
+	if err := db.SQL.QueryRow(`SELECT package_id, template_id, order_number, tracking_code, price_cents, payment_status, work_status, user_id FROM orders WHERE order_number = ?`, response.Request.URL.Path[len("/orders/"):]).Scan(&selectedPackage, &selectedTemplate, &orderNumber, &trackingCode, &selectedPrice, &paymentStatus, &workStatus, &userID); err != nil {
 		t.Fatal(err)
 	}
 	if selectedPackage != "gold" || selectedTemplate != "G01" {
 		t.Fatalf("saved order selection = %s/%s, want gold/G01", selectedPackage, selectedTemplate)
+	}
+	if selectedPrice != 35000000 || paymentStatus != "pending_payment" || workStatus != "waiting_payment" || userID.Valid {
+		t.Fatalf("guest order state = price:%d payment:%s work:%s user:%v", selectedPrice, paymentStatus, workStatus, userID)
+	}
+	if !storage.ValidTrackingCode(trackingCode) || orderNumber == "" {
+		t.Fatalf("generated order codes are invalid: %q, %q", orderNumber, trackingCode)
+	}
+	if !strings.Contains(orderNumber, "SKM-ORD-") {
+		t.Fatalf("order number unexpectedly derived from database ID: %q", orderNumber)
+	}
+
+	trackCSRF := getCSRF(t, client, server.URL+"/track")
+	response = postForm(t, client, server.URL+"/track", url.Values{
+		"csrf_token": {trackCSRF}, "tracking_code": {strings.ToLower(trackingCode)},
+	})
+	trackingPage, err := io.ReadAll(response.Body)
+	response.Body.Close()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if response.StatusCode != http.StatusOK || !strings.HasSuffix(response.Request.URL.Path, "/track/"+trackingCode) {
+		t.Fatalf("tracking lookup ended at %s with status %d", response.Request.URL, response.StatusCode)
+	}
+	for _, private := range []string{"Senja Tester", "senja@example.com"} {
+		if strings.Contains(string(trackingPage), private) {
+			t.Errorf("public tracking page exposed private customer data %q", private)
+		}
+	}
+	if !strings.Contains(string(trackingPage), "Raka &amp; Senja") || !strings.Contains(string(trackingPage), "Menunggu pembayaran") {
+		t.Fatal("public tracking page did not show approved order identity and status")
+	}
+
+	otherClient := newTestClient(t)
+	response, err = otherClient.Get(server.URL + "/orders/" + orderNumber)
+	if err != nil {
+		t.Fatal(err)
+	}
+	response.Body.Close()
+	if response.StatusCode != http.StatusNotFound {
+		t.Fatalf("order checkout without the private access cookie returned %d, want 404", response.StatusCode)
 	}
 }
 

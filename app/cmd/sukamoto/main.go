@@ -29,7 +29,7 @@ func run() error {
 		return err
 	}
 
-	db, err := storage.Open(context.Background(), cfg.DatabasePath)
+	db, err := storage.OpenWithUploads(context.Background(), cfg.DatabasePath, cfg.UploadDir)
 	if err != nil {
 		return err
 	}
@@ -51,6 +51,7 @@ func run() error {
 	if err != nil {
 		return err
 	}
+	handler.SecureCookies = cfg.Env == "production"
 	server := &http.Server{
 		Addr:              cfg.Address,
 		Handler:           handler.Routes(),

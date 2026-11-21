@@ -6,11 +6,13 @@ package generated
 
 import (
 	"context"
+	"database/sql"
 )
 
 type Querier interface {
 	CommitSession(ctx context.Context, arg CommitSessionParams) error
 	CountTemplates(ctx context.Context, arg CountTemplatesParams) (int64, error)
+	CreateGuestOrder(ctx context.Context, arg CreateGuestOrderParams) (int64, error)
 	CreateNotification(ctx context.Context, arg CreateNotificationParams) error
 	CreateOrder(ctx context.Context, arg CreateOrderParams) (int64, error)
 	CreatePayment(ctx context.Context, arg CreatePaymentParams) (int64, error)
@@ -19,28 +21,44 @@ type Querier interface {
 	DeleteSession(ctx context.Context, id string) error
 	FindSession(ctx context.Context, arg FindSessionParams) ([]byte, error)
 	GetActivePaymentMethod(ctx context.Context, id string) (GetActivePaymentMethodRow, error)
+	GetAdminOrderByNumber(ctx context.Context, orderNumber sql.NullString) (GetAdminOrderByNumberRow, error)
+	GetGuestOrderByNumber(ctx context.Context, orderNumber sql.NullString) (GetGuestOrderByNumberRow, error)
 	GetOrderByIDForUser(ctx context.Context, arg GetOrderByIDForUserParams) (GetOrderByIDForUserRow, error)
 	GetOrderForUpdateTx(ctx context.Context, arg GetOrderForUpdateTxParams) (GetOrderForUpdateTxRow, error)
+	GetOrderNumberByPaymentID(ctx context.Context, id int64) (sql.NullString, error)
+	GetOrderStatusesByID(ctx context.Context, id int64) (GetOrderStatusesByIDRow, error)
 	GetPackage(ctx context.Context, id string) (GetPackageRow, error)
 	GetPaymentByID(ctx context.Context, id int64) (Payment, error)
 	GetPaymentByOrderID(ctx context.Context, orderID int64) (Payment, error)
+	GetPaymentProofForAdmin(ctx context.Context, id int64) (GetPaymentProofForAdminRow, error)
 	GetTemplate(ctx context.Context, id string) (GetTemplateRow, error)
 	GetTemplatePackages(ctx context.Context, templateID string) ([]GetTemplatePackagesRow, error)
+	GetTrackedOrderByCode(ctx context.Context, trackingCode sql.NullString) (GetTrackedOrderByCodeRow, error)
 	GetUserByEmail(ctx context.Context, email string) (GetUserByEmailRow, error)
 	GetUserByID(ctx context.Context, id int64) (GetUserByIDRow, error)
 	ListActivePaymentMethods(ctx context.Context) ([]ListActivePaymentMethodsRow, error)
 	ListNotificationsForUser(ctx context.Context, userID int64) ([]Notification, error)
-	ListOrdersForUserWithPayments(ctx context.Context, userID int64) ([]ListOrdersForUserWithPaymentsRow, error)
+	ListOrdersForAdmin(ctx context.Context, arg ListOrdersForAdminParams) ([]ListOrdersForAdminRow, error)
+	ListOrdersForUserWithPayments(ctx context.Context, userID sql.NullInt64) ([]ListOrdersForUserWithPaymentsRow, error)
 	ListPackages(ctx context.Context) ([]ListPackagesRow, error)
 	ListPaymentsForAdmin(ctx context.Context, status string) ([]ListPaymentsForAdminRow, error)
-	ListPaymentsForUser(ctx context.Context, userID int64) ([]ListPaymentsForUserRow, error)
+	ListPaymentsForUser(ctx context.Context, userID sql.NullInt64) ([]ListPaymentsForUserRow, error)
 	ListTemplateCategories(ctx context.Context) ([]string, error)
 	ListTemplatePackages(ctx context.Context) ([]ListTemplatePackagesRow, error)
 	ListTemplates(ctx context.Context, arg ListTemplatesParams) ([]ListTemplatesRow, error)
 	MarkPaymentSubmitted(ctx context.Context, arg MarkPaymentSubmittedParams) (int64, error)
+	RecordOrderStatusHistory(ctx context.Context, arg RecordOrderStatusHistoryParams) error
+	RecordPaymentReview(ctx context.Context, arg RecordPaymentReviewParams) error
 	RejectPayment(ctx context.Context, arg RejectPaymentParams) (int64, error)
+	SaveGuestPaymentProof(ctx context.Context, arg SaveGuestPaymentProofParams) (int64, error)
+	SetOrderPaymentPaid(ctx context.Context, id int64) (int64, error)
+	SetOrderPaymentRejected(ctx context.Context, id int64) (int64, error)
+	SetOrderPaymentSubmitted(ctx context.Context, id int64) (int64, error)
 	SetOrderStatusIfTx(ctx context.Context, arg SetOrderStatusIfTxParams) (int64, error)
+	SetOrderWorkStatus(ctx context.Context, arg SetOrderWorkStatusParams) (int64, error)
 	TemplateSupportsPackage(ctx context.Context, arg TemplateSupportsPackageParams) (bool, error)
+	UpdateOrderInternalNote(ctx context.Context, arg UpdateOrderInternalNoteParams) (int64, error)
+	UpdateOrderPublicNote(ctx context.Context, arg UpdateOrderPublicNoteParams) (int64, error)
 	VerifyPayment(ctx context.Context, arg VerifyPaymentParams) (int64, error)
 }
 

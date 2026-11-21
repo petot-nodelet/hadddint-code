@@ -43,7 +43,7 @@ func Hero() templ.Component {
 		}
 		ctx = templ.InitializeContext(ctx)
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, "<section class=\"relative overflow-hidden\"><div class=\"mx-auto grid max-w-6xl items-center gap-12 px-4 py-20 sm:px-6 lg:grid-cols-2 lg:py-28\"><div><p class=\"text-xs font-semibold uppercase tracking-[0.3em] text-gold\">Digital Wedding Invitation</p><h1 class=\"mt-4 font-serif text-4xl leading-tight sm:text-5xl\">Undangan pernikahan <span class=\"script text-gold\">elegan</span> dalam hitungan menit</h1><p class=\"mt-5 max-w-md leading-relaxed text-ink-muted\">Buat, personalisasi, dan bagikan undangan digital Anda melalui satu link indah. Tanpa coding, tanpa ribet, cukup isi data — kami yang wujudkan.</p><div class=\"mt-8 flex flex-wrap gap-3\"><a href=\"/register\" class=\"btn btn-primary\">Buat Undangan</a> <a href=\"/templates\" class=\"btn btn-outline\">Lihat Template</a></div><p class=\"mt-6 text-sm text-ink-muted\">✓ Responsive smartphone ✓ Link personal ✓ Bagikan via WhatsApp</p></div><div class=\"relative mx-auto w-full max-w-sm\"><div class=\"phone-frame\"><div class=\"phone-screen bg-cover bg-center\" style=\"background-image:url('/index/photo-1511285560929-80b456fea0bc.jpg')\"><div class=\"flex h-full flex-col items-center justify-center bg-ink/40 text-center text-canvas\"><p class=\"text-xs uppercase tracking-[0.35em]\">The Wedding of</p><p class=\"script mt-2 text-4xl\">Raka &amp; Senja</p><p class=\"mt-3 text-sm\">Sabtu, 12 Desember 2026</p><p class=\"mt-1 text-sm\">Bandung, Jawa Barat</p><span class=\"mt-6 rounded-full border border-canvas/60 px-4 py-1.5 text-xs\">Buka Undangan</span></div></div></div></div></div></section>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, "<section class=\"relative overflow-hidden\"><div class=\"mx-auto grid max-w-6xl items-center gap-12 px-4 py-20 sm:px-6 lg:grid-cols-2 lg:py-28\"><div><p class=\"text-xs font-semibold uppercase tracking-[0.3em] text-gold\">Digital Wedding Invitation</p><h1 class=\"mt-4 font-serif text-4xl leading-tight sm:text-5xl\">Undangan pernikahan <span class=\"script text-gold\">elegan</span> dalam hitungan menit</h1><p class=\"mt-5 max-w-md leading-relaxed text-ink-muted\">Buat, personalisasi, dan bagikan undangan digital Anda melalui satu link indah. Tanpa coding, tanpa ribet, cukup isi data — kami yang wujudkan.</p><div class=\"mt-8 flex flex-wrap gap-3\"><a href=\"/templates\" class=\"btn btn-primary\">Buat Undangan</a> <a href=\"/templates\" class=\"btn btn-outline\">Lihat Template</a></div><p class=\"mt-6 text-sm text-ink-muted\">✓ Responsive smartphone ✓ Link personal ✓ Bagikan via WhatsApp</p></div><div class=\"relative mx-auto w-full max-w-sm\"><div class=\"phone-frame\"><div class=\"phone-screen bg-cover bg-center\" style=\"background-image:url('/index/photo-1511285560929-80b456fea0bc.jpg')\"><div class=\"flex h-full flex-col items-center justify-center bg-ink/40 text-center text-canvas\"><p class=\"text-xs uppercase tracking-[0.35em]\">The Wedding of</p><p class=\"script mt-2 text-4xl\">Raka &amp; Senja</p><p class=\"mt-3 text-sm\">Sabtu, 12 Desember 2026</p><p class=\"mt-1 text-sm\">Bandung, Jawa Barat</p><span class=\"mt-6 rounded-full border border-canvas/60 px-4 py-1.5 text-xs\">Buka Undangan</span></div></div></div></div></div></section>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -634,59 +634,30 @@ func Navbar(props NavProps) templ.Component {
 		}
 		ctx = templ.InitializeContext(ctx)
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 42, "<nav class=\"sticky top-0 z-50 bg-canvas/90 backdrop-blur border-b border-line\"><div class=\"mx-auto flex max-w-6xl items-center justify-between px-4 py-3 sm:px-6\"><a href=\"/\" class=\"flex items-baseline gap-1\"><span class=\"font-serif text-xl font-semibold tracking-wide text-ink\">SUKAMOTO</span> <span class=\"hidden text-xs uppercase tracking-[0.25em] text-gold sm:inline\">wedding</span></a><div class=\"flex items-center gap-4 text-sm sm:gap-6\"><a href=\"/\" class=\"nav-link hidden md:inline\">Home</a> <a href=\"/templates\" class=\"nav-link hidden sm:inline\">Templates</a> <a href=\"/#pricing\" class=\"nav-link hidden sm:inline\">Pricing</a> <a href=\"/#how\" class=\"nav-link hidden md:inline\">How It Works</a> ")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 42, "<nav class=\"sticky top-0 z-50 bg-canvas/90 backdrop-blur border-b border-line\"><div class=\"mx-auto flex max-w-6xl items-center justify-between px-4 py-3 sm:px-6\"><a href=\"/\" class=\"flex items-baseline gap-1\"><span class=\"font-serif text-xl font-semibold tracking-wide text-ink\">SUKAMOTO</span> <span class=\"hidden text-xs uppercase tracking-[0.25em] text-gold sm:inline\">wedding</span></a><div class=\"flex items-center gap-4 text-sm sm:gap-6\"><a href=\"/\" class=\"nav-link hidden md:inline\">Home</a> <a href=\"/templates\" class=\"nav-link hidden sm:inline\">Templates</a> <a href=\"/#pricing\" class=\"nav-link hidden sm:inline\">Pricing</a> <a href=\"/#how\" class=\"nav-link hidden md:inline\">How It Works</a> <a href=\"/track\" class=\"nav-link\">Cek Pesanan</a> ")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		if props.Authenticated {
-			if props.IsAdmin {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 43, "<a href=\"/admin\" class=\"nav-link\">Admin</a>")
-				if templ_7745c5c3_Err != nil {
-					return templ_7745c5c3_Err
-				}
-			} else {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 44, "<a href=\"/dashboard\" class=\"nav-link\">Dashboard</a>")
-				if templ_7745c5c3_Err != nil {
-					return templ_7745c5c3_Err
-				}
-			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 45, " <span class=\"hidden text-ink-muted sm:inline\">")
+		if props.IsAdmin {
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 43, "<a href=\"/admin\" class=\"nav-link\">Admin</a><form method=\"post\" action=\"/logout\" class=\"inline\"><input type=\"hidden\" name=\"csrf_token\" value=\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var30 string
-			templ_7745c5c3_Var30, templ_7745c5c3_Err = templ.JoinStringErrs(props.Name)
+			templ_7745c5c3_Var30, templ_7745c5c3_Err = templruntime.NewAttributeExpression(props.CSRF).Resolve(ctx)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages_landing.templ`, Line: 209, Col: 63}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages_landing.templ`, Line: 207, Col: 63}
 			}
-			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var30))
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 46, "</span><form method=\"post\" action=\"/logout\" class=\"inline\"><input type=\"hidden\" name=\"csrf_token\" value=\"")
+			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var30)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			var templ_7745c5c3_Var31 string
-			templ_7745c5c3_Var31, templ_7745c5c3_Err = templruntime.NewAttributeExpression(props.CSRF).Resolve(ctx)
-			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages_landing.templ`, Line: 211, Col: 63}
-			}
-			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var31)
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 47, "\"> <button type=\"submit\" class=\"btn btn-ghost text-sm\">Keluar</button></form>")
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-		} else {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 48, "<a href=\"/login\" class=\"nav-link\">Login</a> <a href=\"/register\" class=\"btn btn-primary\"><span class=\"sm:hidden\">Buat</span><span class=\"hidden sm:inline\">Create Invitation</span></a>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 44, "\"> <button type=\"submit\" class=\"btn btn-ghost text-sm\">Keluar</button></form>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 49, "</div></div></nav>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 45, "<a href=\"/templates\" class=\"btn btn-primary\"><span class=\"sm:hidden\">Buat</span><span class=\"hidden sm:inline\">Buat Undangan</span></a></div></div></nav>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -711,7 +682,7 @@ func Footer() templ.Component {
 		}
 		ctx = templ.InitializeContext(ctx)
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 50, "<footer class=\"mt-20 border-t border-line bg-ink text-canvas\"><div class=\"mx-auto grid max-w-6xl gap-10 px-4 py-14 sm:grid-cols-3 sm:px-6\"><div><p class=\"font-serif text-2xl\">SUKAMOTO</p><p class=\"mt-3 max-w-xs text-sm leading-relaxed text-canvas/70\">Platform jasa pembuatan undangan pernikahan digital. Elegan, personal, dan mudah dibagikan.</p></div><div><p class=\"text-sm font-semibold uppercase tracking-widest text-gold\">Layanan</p><ul class=\"mt-4 space-y-2 text-sm text-canvas/80\"><li><a class=\"hover:text-gold\" href=\"/templates\">Katalog Template</a></li><li><a class=\"hover:text-gold\" href=\"/#pricing\">Paket Harga</a></li><li><a class=\"hover:text-gold\" href=\"/#how\">Cara Kerja</a></li><li><a class=\"hover:text-gold\" href=\"/register\">Buat Undangan</a></li></ul></div><div><p class=\"text-sm font-semibold uppercase tracking-widest text-gold\">Kontak</p><ul class=\"mt-4 space-y-2 text-sm text-canvas/80\"><li>WhatsApp: +62 812-0000-0000</li><li>Instagram: ")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 46, "<footer class=\"mt-20 border-t border-line bg-ink text-canvas\"><div class=\"mx-auto grid max-w-6xl gap-10 px-4 py-14 sm:grid-cols-3 sm:px-6\"><div><p class=\"font-serif text-2xl\">SUKAMOTO</p><p class=\"mt-3 max-w-xs text-sm leading-relaxed text-canvas/70\">Platform jasa pembuatan undangan pernikahan digital. Elegan, personal, dan mudah dibagikan.</p></div><div><p class=\"text-sm font-semibold uppercase tracking-widest text-gold\">Layanan</p><ul class=\"mt-4 space-y-2 text-sm text-canvas/80\"><li><a class=\"hover:text-gold\" href=\"/templates\">Katalog Template</a></li><li><a class=\"hover:text-gold\" href=\"/#pricing\">Paket Harga</a></li><li><a class=\"hover:text-gold\" href=\"/#how\">Cara Kerja</a></li><li><a class=\"hover:text-gold\" href=\"/templates\">Buat Undangan</a></li></ul></div><div><p class=\"text-sm font-semibold uppercase tracking-widest text-gold\">Kontak</p><ul class=\"mt-4 space-y-2 text-sm text-canvas/80\"><li>WhatsApp: +62 812-0000-0000</li><li>Instagram: ")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -719,7 +690,7 @@ func Footer() templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 51, "</li><li>TikTok: ")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 47, "</li><li>TikTok: ")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -727,7 +698,7 @@ func Footer() templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 52, "</li><li>Email: halo@sukamoto.web.id</li></ul></div></div><div class=\"border-t border-canvas/10 py-5 text-center text-xs text-canvas/50\">© 2026 SUKAMOTO Digital Wedding Invitation. All rights reserved.</div></footer>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 48, "</li><li>Email: halo@sukamoto.web.id</li></ul></div></div><div class=\"border-t border-canvas/10 py-5 text-center text-xs text-canvas/50\">© 2026 SUKAMOTO Digital Wedding Invitation. All rights reserved.</div></footer>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}

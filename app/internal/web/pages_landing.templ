@@ -30,7 +30,7 @@ templ Hero() {
 					Tanpa coding, tanpa ribet, cukup isi data — kami yang wujudkan.
 				</p>
 				<div class="mt-8 flex flex-wrap gap-3">
-					<a href="/register" class="btn btn-primary">Buat Undangan</a>
+					<a href="/templates" class="btn btn-primary">Buat Undangan</a>
 					<a href="/templates" class="btn btn-outline">Lihat Template</a>
 				</div>
 				<p class="mt-6 text-sm text-ink-muted">✓ Responsive smartphone ✓ Link personal ✓ Bagikan via WhatsApp</p>
@@ -200,21 +200,15 @@ templ Navbar(props NavProps) {
 				<a href="/templates" class="nav-link hidden sm:inline">Templates</a>
 				<a href="/#pricing" class="nav-link hidden sm:inline">Pricing</a>
 				<a href="/#how" class="nav-link hidden md:inline">How It Works</a>
-				if props.Authenticated {
-					if props.IsAdmin {
-						<a href="/admin" class="nav-link">Admin</a>
-					} else {
-						<a href="/dashboard" class="nav-link">Dashboard</a>
-					}
-					<span class="hidden text-ink-muted sm:inline">{ props.Name }</span>
+				<a href="/track" class="nav-link">Cek Pesanan</a>
+				if props.IsAdmin {
+					<a href="/admin" class="nav-link">Admin</a>
 					<form method="post" action="/logout" class="inline">
 						<input type="hidden" name="csrf_token" value={ props.CSRF }/>
 						<button type="submit" class="btn btn-ghost text-sm">Keluar</button>
 					</form>
-				} else {
-					<a href="/login" class="nav-link">Login</a>
-					<a href="/register" class="btn btn-primary"><span class="sm:hidden">Buat</span><span class="hidden sm:inline">Create Invitation</span></a>
 				}
+				<a href="/templates" class="btn btn-primary"><span class="sm:hidden">Buat</span><span class="hidden sm:inline">Buat Undangan</span></a>
 			</div>
 		</div>
 	</nav>
@@ -235,7 +229,7 @@ templ Footer() {
 					<li><a class="hover:text-gold" href="/templates">Katalog Template</a></li>
 					<li><a class="hover:text-gold" href="/#pricing">Paket Harga</a></li>
 					<li><a class="hover:text-gold" href="/#how">Cara Kerja</a></li>
-					<li><a class="hover:text-gold" href="/register">Buat Undangan</a></li>
+					<li><a class="hover:text-gold" href="/templates">Buat Undangan</a></li>
 				</ul>
 			</div>
 			<div>

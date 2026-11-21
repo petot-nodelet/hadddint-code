@@ -10,6 +10,7 @@ import (
 type Config struct {
 	Address         string
 	DatabasePath    string
+	UploadDir       string
 	Env             string
 	SessionName     string
 	SessionTTLHours int
@@ -20,6 +21,7 @@ func Load() (*Config, error) {
 	c := &Config{
 		Address:         getenv("SUKAMOTO_ADDR", ":8080"),
 		DatabasePath:    getenv("DATABASE_PATH", "data/sukamoto.db"),
+		UploadDir:       getenv("UPLOAD_DIR", "data/uploads/payment-proofs"),
 		Env:             getenv("APP_ENV", "development"),
 		SessionName:     "sukamoto_session",
 		SessionTTLHours: 72,

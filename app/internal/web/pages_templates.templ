@@ -67,9 +67,13 @@ type TemplateDetailData struct {
 }
 
 type TemplateSelectionData struct {
-	Page     PageData
-	Template storage.Template
-	Package  storage.PackageOption
+	Page            PageData
+	Template        storage.Template
+	Package         storage.PackageOption
+	CustomerName    string
+	CustomerContact string
+	PublicName      string
+	Error           string
 }
 
 templ TemplateCatalogPage(data CatalogData) {
@@ -188,7 +192,7 @@ templ templateDetailContent(data TemplateDetailData) {
 			</div>
 			<aside id="select" class="card p-5 sm:p-6">
 				<h2 class="font-serif text-2xl">Gunakan template ini</h2>
-				<p class="mt-2 text-sm leading-relaxed text-ink-muted">Pilih paket yang mendukung desain ini. Pilihan akan disimpan sebagai pesanan draf setelah Anda masuk.</p>
+				<p class="mt-2 text-sm leading-relaxed text-ink-muted">Pilih paket, isi informasi pemesan, lalu simpan kode pesanan untuk memantau prosesnya.</p>
 				<h3 class="mt-6 text-xs font-semibold uppercase tracking-widest text-gold">Paket yang didukung</h3>
 				<ul class="mt-3 space-y-2">
 					for _, pkg := range data.Template.Packages {
@@ -202,11 +206,10 @@ templ templateDetailContent(data TemplateDetailData) {
 						</li>
 					}
 				</ul>
-				<form method="post" action={ templ.SafeURL("/templates/" + url.PathEscape(data.Template.ID) + "/use") } class="mt-6 space-y-4">
-					<input type="hidden" name="csrf_token" value={ data.Page.CSRF }/>
+				<form method="get" action={ templ.SafeURL("/templates/" + url.PathEscape(data.Template.ID) + "/use") } class="mt-6 space-y-4">
 					<label class="form-label">
 						<span>Pilih paket</span>
-						<select class="form-input" name="package_id" required>
+						<select class="form-input" name="package" required>
 							for _, pkg := range data.Template.Packages {
 								if pkg.Available && !pkg.ComingSoon {
 									<option value={ pkg.ID }>{ pkg.Name }</option>
@@ -215,12 +218,12 @@ templ templateDetailContent(data TemplateDetailData) {
 						</select>
 					</label>
 					if hasAvailablePackage(data.Template.Packages) {
-						<button class="btn btn-primary w-full" type="submit">Gunakan template</button>
+						<button class="btn btn-primary w-full" type="submit">Lanjutkan pemesanan</button>
 					} else {
 						<button class="btn btn-outline w-full" type="button" disabled>Belum tersedia untuk dipesan</button>
 					}
 				</form>
-				<p class="mt-4 text-xs leading-relaxed text-ink-muted">Belum masuk? Anda akan diarahkan ke login atau registrasi. Pilihan template dan paket tetap terbawa.</p>
+				<p class="mt-4 text-xs leading-relaxed text-ink-muted">Tidak perlu membuat akun untuk memesan.</p>
 			</aside>
 		</div>
 	</section>
@@ -272,13 +275,28 @@ templ TemplateSelectionPage(data TemplateSelectionData) {
 templ templateSelectionContent(data TemplateSelectionData) {
 	<section class="mx-auto max-w-xl px-4 py-16 sm:px-6">
 		<div class="card p-6 sm:p-8">
-			<p class="text-xs font-semibold uppercase tracking-[0.3em] text-gold">Satu langkah lagi</p>
-			<h1 class="mt-3 font-serif text-3xl">Konfirmasi pilihan Anda</h1>
-			<p class="mt-4 text-sm leading-relaxed text-ink-muted">Template <strong class="text-ink">{ data.Template.Name }</strong> untuk paket <strong class="text-ink">{ data.Package.Name }</strong> akan disimpan sebagai pesanan draf.</p>
+			<p class="text-xs font-semibold uppercase tracking-[0.3em] text-gold">Pemesanan tanpa akun</p>
+			<h1 class="mt-3 font-serif text-3xl">Mulai pesanan Anda</h1>
+			<p class="mt-4 text-sm leading-relaxed text-ink-muted">Template <strong class="text-ink">{ data.Template.Name }</strong> · Paket <strong class="text-ink">{ data.Package.Name }</strong>. Harga final mengikuti data paket di sistem.</p>
+			if data.Error != "" {
+				<p role="alert" class="mt-5 rounded-lg border border-red-900 bg-red-950/50 p-3 text-sm text-red-200">{ data.Error }</p>
+			}
 			<form method="post" action={ templ.SafeURL("/templates/" + url.PathEscape(data.Template.ID) + "/use") } class="mt-7 space-y-4">
 				<input type="hidden" name="csrf_token" value={ data.Page.CSRF }/>
 				<input type="hidden" name="package_id" value={ data.Package.ID }/>
-				<button class="btn btn-primary w-full" type="submit">Simpan pilihan &amp; lanjutkan</button>
+				<label class="form-label">
+					<span>Nama pemesan</span>
+					<input class="form-input" type="text" name="customer_name" value={ data.CustomerName } autocomplete="name" required minlength="2" maxlength="100"/>
+				</label>
+				<label class="form-label">
+					<span>Email atau nomor WhatsApp</span>
+					<input class="form-input" type="text" name="customer_contact" value={ data.CustomerContact } autocomplete="email" required maxlength="254"/>
+				</label>
+				<label class="form-label">
+					<span>Nama pasangan yang akan ditampilkan</span>
+					<input class="form-input" type="text" name="public_name" value={ data.PublicName } required minlength="2" maxlength="100"/>
+				</label>
+				<button class="btn btn-primary w-full" type="submit">Buat pesanan &amp; lanjutkan</button>
 			</form>
 			<a href={ templ.SafeURL("/templates/" + url.PathEscape(data.Template.ID)) } class="btn btn-outline mt-3 w-full">Ubah pilihan</a>
 		</div>

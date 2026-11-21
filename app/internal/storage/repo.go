@@ -257,7 +257,7 @@ func (db *DB) TemplateSupportsPackage(ctx context.Context, templateID, packageID
 
 func (db *DB) CreateOrder(ctx context.Context, userID int64, packageID, templateID string) (int64, error) {
 	id, err := db.Queries.CreateOrder(ctx, generated.CreateOrderParams{
-		UserID: userID, PackageID: packageID, TemplateID: templateID,
+		UserID: sql.NullInt64{Int64: userID, Valid: true}, PackageID: packageID, TemplateID: templateID,
 	})
 	if err != nil {
 		return 0, fmt.Errorf("create order: %w", err)
@@ -267,7 +267,7 @@ func (db *DB) CreateOrder(ctx context.Context, userID int64, packageID, template
 
 func (db *DB) GetOrderByIDForUser(ctx context.Context, orderID, userID int64) (*OrderSelection, error) {
 	row, err := db.Queries.GetOrderByIDForUser(ctx, generated.GetOrderByIDForUserParams{
-		ID: orderID, UserID: userID,
+		ID: orderID, UserID: sql.NullInt64{Int64: userID, Valid: true},
 	})
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, ErrNotFound

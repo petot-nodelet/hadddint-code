@@ -19,13 +19,39 @@ type Notification struct {
 }
 
 type Order struct {
-	ID         int64  `json:"id"`
-	UserID     int64  `json:"user_id"`
-	PackageID  string `json:"package_id"`
-	TemplateID string `json:"template_id"`
-	Status     string `json:"status"`
-	CreatedAt  string `json:"created_at"`
-	UpdatedAt  string `json:"updated_at"`
+	ID              int64          `json:"id"`
+	UserID          sql.NullInt64  `json:"user_id"`
+	PackageID       string         `json:"package_id"`
+	TemplateID      string         `json:"template_id"`
+	Status          string         `json:"status"`
+	OrderNumber     sql.NullString `json:"order_number"`
+	TrackingCode    sql.NullString `json:"tracking_code"`
+	CustomerName    string         `json:"customer_name"`
+	CustomerContact string         `json:"customer_contact"`
+	PublicName      string         `json:"public_name"`
+	PriceCents      int64          `json:"price_cents"`
+	PaymentStatus   string         `json:"payment_status"`
+	WorkStatus      string         `json:"work_status"`
+	PublicNote      string         `json:"public_note"`
+	InternalNote    string         `json:"internal_note"`
+	InvitationSlug  sql.NullString `json:"invitation_slug"`
+	DraftData       string         `json:"draft_data"`
+	DraftAccessHash []byte         `json:"draft_access_hash"`
+	CreatedAt       string         `json:"created_at"`
+	UpdatedAt       string         `json:"updated_at"`
+}
+
+type OrderStatusHistory struct {
+	ID               int64         `json:"id"`
+	OrderID          int64         `json:"order_id"`
+	ActorUserID      sql.NullInt64 `json:"actor_user_id"`
+	ActorType        string        `json:"actor_type"`
+	OldPaymentStatus string        `json:"old_payment_status"`
+	NewPaymentStatus string        `json:"new_payment_status"`
+	OldWorkStatus    string        `json:"old_work_status"`
+	NewWorkStatus    string        `json:"new_work_status"`
+	Note             string        `json:"note"`
+	CreatedAt        string        `json:"created_at"`
 }
 
 type Package struct {
@@ -77,7 +103,7 @@ type PackageFeature struct {
 type Payment struct {
 	ID              int64          `json:"id"`
 	OrderID         int64          `json:"order_id"`
-	UserID          int64          `json:"user_id"`
+	UserID          sql.NullInt64  `json:"user_id"`
 	PaymentMethodID string         `json:"payment_method_id"`
 	AmountCents     int64          `json:"amount_cents"`
 	Currency        string         `json:"currency"`
@@ -105,6 +131,16 @@ type PaymentMethod struct {
 	SortOrder     int64  `json:"sort_order"`
 	CreatedAt     string `json:"created_at"`
 	UpdatedAt     string `json:"updated_at"`
+}
+
+type PaymentReview struct {
+	ID        int64  `json:"id"`
+	PaymentID int64  `json:"payment_id"`
+	OrderID   int64  `json:"order_id"`
+	AdminID   int64  `json:"admin_id"`
+	Decision  string `json:"decision"`
+	Reason    string `json:"reason"`
+	CreatedAt string `json:"created_at"`
 }
 
 type Session struct {

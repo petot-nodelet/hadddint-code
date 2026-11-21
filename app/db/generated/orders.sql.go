@@ -7,6 +7,7 @@ package generated
 
 import (
 	"context"
+	"database/sql"
 )
 
 const createOrder = `-- name: CreateOrder :one
@@ -16,9 +17,9 @@ RETURNING id
 `
 
 type CreateOrderParams struct {
-	UserID     int64  `json:"user_id"`
-	PackageID  string `json:"package_id"`
-	TemplateID string `json:"template_id"`
+	UserID     sql.NullInt64 `json:"user_id"`
+	PackageID  string        `json:"package_id"`
+	TemplateID string        `json:"template_id"`
 }
 
 func (q *Queries) CreateOrder(ctx context.Context, arg CreateOrderParams) (int64, error) {
@@ -38,8 +39,8 @@ WHERE o.id = ? AND o.user_id = ?
 `
 
 type GetOrderByIDForUserParams struct {
-	ID     int64 `json:"id"`
-	UserID int64 `json:"user_id"`
+	ID     int64         `json:"id"`
+	UserID sql.NullInt64 `json:"user_id"`
 }
 
 type GetOrderByIDForUserRow struct {

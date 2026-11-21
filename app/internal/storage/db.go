@@ -46,10 +46,11 @@ func OpenWithUploads(ctx context.Context, path, uploadsPath string) (*DB, error)
 	}
 	var absoluteUploads string
 	if uploadsPath != "" {
-		absoluteUploads, err = filepath.Abs(uploadsPath)
+		resolvedUploads, err := filepath.Abs(uploadsPath)
 		if err != nil {
 			return nil, fmt.Errorf("storage: resolve upload directory: %w", err)
 		}
+		absoluteUploads = resolvedUploads
 		if err := os.MkdirAll(absoluteUploads, 0o750); err != nil {
 			return nil, fmt.Errorf("storage: create upload directory: %w", err)
 		}
@@ -109,7 +110,7 @@ func OpenWithUploads(ctx context.Context, path, uploadsPath string) (*DB, error)
 	if err := queries.DeleteExpiredSessions(ctx, time.Now().Unix()); err != nil {
 		return closeOnError(fmt.Errorf("storage: clean expired sessions: %w", err))
 	}
-	return &DB{SQL: sqlDB, Queries: queries}, nil
+	return &DB{SQL: sqlDB, Queries: queries, UploadDir: absoluteUploads}, nil
 }
 
 func (db *DB) Close() error {
