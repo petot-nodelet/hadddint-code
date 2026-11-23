@@ -2,11 +2,14 @@
 
 ## Menjalankan aplikasi
 
-Jalankan server Go dari direktori `app`:
+Jalankan server dari root repository:
 
 ```sh
-cd app && /usr/local/go/bin/go run ./cmd/sukamoto
+./run-server.sh
 ```
+
+Skrip mencari Go di `PATH`, lalu mencoba `/usr/local/go/bin/go`. Untuk lokasi
+Go lain, atur `GO_BIN`, misalnya `GO_BIN=/opt/go/bin/go ./run-server.sh`.
 
 Secara default aplikasi berjalan di `http://localhost:8080`, menggunakan
 `app/data/sukamoto.db` untuk SQLite dan `app/data/uploads/payment-proofs` untuk
@@ -20,8 +23,16 @@ bukti pembayaran. Konfigurasi dapat diubah dengan environment variable:
 | `APP_ENV` | `development` | Gunakan `production` untuk cookie aman HTTPS |
 | `STATIC_DIR` | `..` | Direktori root aset statis |
 
-Database dimigrasikan otomatis saat aplikasi dimulai. CSS dapat dibangun ulang
-dari direktori `app` menggunakan `npm run css:build`.
+Database dimigrasikan otomatis saat aplikasi dimulai. Tailwind hanya dipakai
+untuk membangun CSS saat pengembangan (Node.js 20 dan npm); production cukup
+menjalankan binary Go dan menyajikan `app.css`, tanpa Node.js/npm runtime.
+Bangun CSS dari direktori `app` menggunakan `npm run css:build`.
+
+Tracking menggunakan kode baru 60-bit; kode 40-bit yang sudah diterbitkan tetap
+diterima. Aplikasi memakai alamat peer TCP sebagai identitas rate limit dan
+sengaja tidak mempercayai `X-Forwarded-For`. Jika dipasang di belakang reverse
+proxy, batasi akses langsung ke aplikasi dan atur rate limit tracking di proxy
+tepercaya.
 
 ### Membuat akun admin
 

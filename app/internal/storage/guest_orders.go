@@ -22,7 +22,7 @@ var (
 )
 
 var (
-	trackingCodePattern = regexp.MustCompile(`^SKM-[A-Z2-7]{4}-[A-Z2-7]{4}$`)
+	trackingCodePattern = regexp.MustCompile(`^SKM-[A-Z2-7]{4}-[A-Z2-7]{4}(?:-[A-Z2-7]{4})?$`)
 	orderNumberPattern  = regexp.MustCompile(`^SKM-ORD-[0-9]{8}-[A-Z2-7]{8}$`)
 	orderCodeEncoding   = base32.NewEncoding("ABCDEFGHIJKLMNOPQRSTUVWXYZ234567").WithPadding(base32.NoPadding)
 )
@@ -105,12 +105,12 @@ type PaymentMethod struct {
 }
 
 func GenerateTrackingCode() (string, error) {
-	raw := make([]byte, 5)
+	raw := make([]byte, 8)
 	if _, err := rand.Read(raw); err != nil {
 		return "", fmt.Errorf("generate tracking code: %w", err)
 	}
 	code := orderCodeEncoding.EncodeToString(raw)
-	return "SKM-" + code[:4] + "-" + code[4:], nil
+	return "SKM-" + code[:4] + "-" + code[4:8] + "-" + code[8:12], nil
 }
 
 func GenerateOrderNumber() (string, error) {

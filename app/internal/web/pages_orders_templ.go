@@ -542,7 +542,7 @@ func trackContent(data TrackingPageData) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 42, "\" placeholder=\"SKM-7K9P-4X2M\" required maxlength=\"13\" autocomplete=\"off\"></label> <button class=\"btn btn-primary sm:mt-6\" type=\"submit\">Cek Pesanan</button></form></div>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 42, "\" placeholder=\"SKM-7K9P-4X2M-8N5Q\" required maxlength=\"18\" autocomplete=\"off\"></label> <button class=\"btn btn-primary sm:mt-6\" type=\"submit\">Cek Pesanan</button></form></div>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}

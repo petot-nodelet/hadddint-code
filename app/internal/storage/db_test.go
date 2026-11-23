@@ -2,10 +2,14 @@ package storage
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/pressly/goose/v3"
+	migrations "github.com/sukamoto/app/db"
 )
 
 func TestOpenMigratesAndSeedsSQLite(t *testing.T) {
@@ -67,6 +71,126 @@ func TestOpenEnablesForeignKeys(t *testing.T) {
 	_, err = db.SQL.Exec(`INSERT INTO template_packages (template_id, package_id) VALUES ('missing', 'silver')`)
 	if err == nil {
 		t.Fatal("expected foreign-key constraint failure")
+	}
+}
+
+func TestOpenRestrictsDatabaseAndUploadPermissions(t *testing.T) {
+	dir := t.TempDir()
+	databasePath := filepath.Join(dir, "private.db")
+	uploadDir := filepath.Join(dir, "payment-proofs")
+	db, err := OpenWithUploads(context.Background(), databasePath, uploadDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+
+	for _, path := range []string{databasePath, databasePath + "-wal", databasePath + "-shm"} {
+		info, err := os.Stat(path)
+		if errors.Is(err, os.ErrNotExist) {
+			continue
+		}
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got := info.Mode().Perm(); got != 0o600 {
+			t.Errorf("%s permissions = %o, want 600", filepath.Base(path), got)
+		}
+	}
+	info, err := os.Stat(uploadDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := info.Mode().Perm(); got != 0o700 {
+		t.Fatalf("upload directory permissions = %o, want 700", got)
+	}
+}
+
+func TestMigrationsPreserveLegacyOrdersAndPayments(t *testing.T) {
+	ctx := context.Background()
+	databasePath := filepath.Join(t.TempDir(), "legacy.db")
+	sqlDB, err := sql.Open("sqlite", databasePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sqlDB.SetMaxOpenConns(1)
+	defer sqlDB.Close()
+	if _, err := sqlDB.ExecContext(ctx, "PRAGMA foreign_keys = ON"); err != nil {
+		t.Fatal(err)
+	}
+
+	migrationMu.Lock()
+	defer migrationMu.Unlock()
+	if err := goose.SetDialect("sqlite3"); err != nil {
+		t.Fatal(err)
+	}
+	goose.SetBaseFS(migrations.Migrations)
+	if err := goose.UpToContext(ctx, sqlDB, "migrations", 4); err != nil {
+		t.Fatal(err)
+	}
+
+	var userID int64
+	if err := sqlDB.QueryRowContext(ctx, `INSERT INTO users (full_name, email, password_hash, role)
+		VALUES ('Legacy Customer', 'legacy@example.com', 'legacy-hash', 'customer')
+		RETURNING id`).Scan(&userID); err != nil {
+		t.Fatal(err)
+	}
+	var orderID int64
+	if err := sqlDB.QueryRowContext(ctx, `INSERT INTO orders (user_id, package_id, template_id, status)
+		VALUES (?, 'silver', 'S01', 'paid') RETURNING id`, userID).Scan(&orderID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := sqlDB.ExecContext(ctx, `INSERT INTO payments
+		(order_id, user_id, payment_method_id, amount_cents, status)
+		VALUES (?, ?, 'bank_transfer', 12345000, 'verified')`, orderID, userID); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := goose.UpToContext(ctx, sqlDB, "migrations", 5); err != nil {
+		t.Fatal(err)
+	}
+	var price int64
+	var orderUserID sql.NullInt64
+	var paymentAmount int64
+	if err := sqlDB.QueryRowContext(ctx, `SELECT o.price_cents, o.user_id, pay.amount_cents
+		FROM orders AS o JOIN payments AS pay ON pay.order_id = o.id WHERE o.id = ?`, orderID).
+		Scan(&price, &orderUserID, &paymentAmount); err != nil {
+		t.Fatal(err)
+	}
+	if price == paymentAmount {
+		t.Fatal("legacy-price fixture did not reproduce the package-price backfill")
+	}
+	if !orderUserID.Valid || orderUserID.Int64 != userID || paymentAmount != 12345000 {
+		t.Fatalf("migration 00005 changed legacy order/payment identity or amount: user=%#v amount=%d", orderUserID, paymentAmount)
+	}
+	if err := goose.UpContext(ctx, sqlDB, "migrations"); err != nil {
+		t.Fatal(err)
+	}
+	if err := sqlDB.QueryRowContext(ctx, "SELECT price_cents FROM orders WHERE id = ?", orderID).Scan(&price); err != nil {
+		t.Fatal(err)
+	}
+	if price != paymentAmount {
+		t.Fatalf("historical order price = %d, want payment amount %d", price, paymentAmount)
+	}
+	var userCount int
+	if err := sqlDB.QueryRowContext(ctx, "SELECT count(*) FROM users WHERE id = ?", userID).Scan(&userCount); err != nil {
+		t.Fatal(err)
+	}
+	if userCount != 1 {
+		t.Fatalf("legacy customer count = %d, want 1", userCount)
+	}
+	var foreignKeyViolations int
+	if err := sqlDB.QueryRowContext(ctx, "SELECT count(*) FROM pragma_foreign_key_check").Scan(&foreignKeyViolations); err != nil {
+		t.Fatal(err)
+	}
+	if foreignKeyViolations != 0 {
+		t.Fatalf("foreign-key violations after migration = %d", foreignKeyViolations)
+	}
+	var foreignKeys int
+	if err := sqlDB.QueryRowContext(ctx, "PRAGMA foreign_keys").Scan(&foreignKeys); err != nil {
+		t.Fatal(err)
+	}
+	if foreignKeys != 1 {
+		t.Fatalf("foreign_keys after migration = %d, want 1", foreignKeys)
 	}
 }
 

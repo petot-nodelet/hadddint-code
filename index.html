@@ -526,12 +526,7 @@
 
     <script>
       function accessAdmin() {
-        const pin = prompt("Masukkan PIN Keamanan Admin:");
-        if (pin === "110202") {
-          window.location.href = "/admin";
-        } else if (pin !== null) {
-          alert("PIN Salah! Akses ditolak.");
-        }
+        window.location.href = "/admin/login";
       }
       function toggleMenu() {
         var menu = document.getElementById("menuDropdown");

@@ -3,6 +3,7 @@ package storage
 import (
 	"bytes"
 	"context"
+	"errors"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -18,6 +19,9 @@ func TestTrackingCodeAndOrderNumberGeneration(t *testing.T) {
 		}
 		if !ValidTrackingCode(trackingCode) {
 			t.Fatalf("generated tracking code has invalid format: %q", trackingCode)
+		}
+		if len(trackingCode) != 18 {
+			t.Fatalf("generated tracking code has %d characters, want 18", len(trackingCode))
 		}
 		if NormalizeTrackingCode(strings.ToLower(trackingCode)) != trackingCode {
 			t.Fatalf("tracking code normalization failed for %q", trackingCode)
@@ -38,6 +42,9 @@ func TestTrackingCodeAndOrderNumberGeneration(t *testing.T) {
 			t.Fatalf("order number collision: %q", orderNumber)
 		}
 		orderNumbers[orderNumber] = struct{}{}
+	}
+	if !ValidTrackingCode("SKM-AAAA-BBBB") {
+		t.Fatal("legacy tracking codes must remain valid")
 	}
 }
 
@@ -95,5 +102,80 @@ func TestCreateGuestOrdersStoresDatabasePriceAndEnforcesEntitlement(t *testing.T
 	}
 	if _, err := db.CreateGuestOrder(ctx, "platinum", "S01", "Customer", "contact@example.com", "Couple", make([]byte, 32)); err != ErrOrderUnavailable {
 		t.Fatalf("unavailable package error = %v, want ErrOrderUnavailable", err)
+	}
+}
+
+func TestConcurrentPaymentReviewsCommitOnlyOnce(t *testing.T) {
+	ctx := context.Background()
+	db, err := Open(ctx, filepath.Join(t.TempDir(), "payment-review-race.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+
+	_, accessHash, err := NewOrderAccessToken()
+	if err != nil {
+		t.Fatal(err)
+	}
+	order, err := db.CreateGuestOrder(ctx, "silver", "S01",
+		"Customer", "customer@example.com", "Ayu & Bayu", accessHash)
+	if err != nil {
+		t.Fatal(err)
+	}
+	adminID, err := db.CreateUser(ctx, "Admin", "race-admin@example.com", "", "hash", "admin")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := db.SubmitGuestPayment(ctx, order.OrderNumber, "bank_transfer",
+		"proof.png", "0123456789abcdef01234567.png", "image/png", 128); err != nil {
+		t.Fatal(err)
+	}
+	var paymentID int64
+	if err := db.SQL.QueryRowContext(ctx, `SELECT id FROM payments
+		WHERE order_id = (SELECT id FROM orders WHERE order_number = ?)`, order.OrderNumber).Scan(&paymentID); err != nil {
+		t.Fatal(err)
+	}
+
+	start := make(chan struct{})
+	results := make(chan error, 2)
+	for range 2 {
+		go func() {
+			<-start
+			results <- db.ReviewGuestPayment(ctx, paymentID, adminID, true, "")
+		}()
+	}
+	close(start)
+	successes, rejected := 0, 0
+	for range 2 {
+		switch err := <-results; {
+		case err == nil:
+			successes++
+		case errors.Is(err, ErrInvalidOrderTransition):
+			rejected++
+		default:
+			t.Fatalf("concurrent payment review returned unexpected error: %v", err)
+		}
+	}
+	if successes != 1 || rejected != 1 {
+		t.Fatalf("review outcomes successes=%d rejected=%d, want 1 each", successes, rejected)
+	}
+
+	var paymentStatus, orderPaymentStatus, workStatus string
+	if err := db.SQL.QueryRowContext(ctx, `SELECT pay.status, o.payment_status, o.work_status
+		FROM payments AS pay JOIN orders AS o ON o.id = pay.order_id WHERE pay.id = ?`, paymentID).
+		Scan(&paymentStatus, &orderPaymentStatus, &workStatus); err != nil {
+		t.Fatal(err)
+	}
+	if paymentStatus != "verified" || orderPaymentStatus != "paid" || workStatus != "processing" {
+		t.Fatalf("concurrent review left inconsistent states payment=%s order=%s work=%s",
+			paymentStatus, orderPaymentStatus, workStatus)
+	}
+	var reviewCount int
+	if err := db.SQL.QueryRowContext(ctx, `SELECT count(*) FROM payment_reviews
+		WHERE payment_id = ? AND decision = 'approved'`, paymentID).Scan(&reviewCount); err != nil {
+		t.Fatal(err)
+	}
+	if reviewCount != 1 {
+		t.Fatalf("approved review audit rows = %d, want 1", reviewCount)
 	}
 }

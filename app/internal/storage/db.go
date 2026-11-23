@@ -51,8 +51,11 @@ func OpenWithUploads(ctx context.Context, path, uploadsPath string) (*DB, error)
 			return nil, fmt.Errorf("storage: resolve upload directory: %w", err)
 		}
 		absoluteUploads = resolvedUploads
-		if err := os.MkdirAll(absoluteUploads, 0o750); err != nil {
+		if err := os.MkdirAll(absoluteUploads, 0o700); err != nil {
 			return nil, fmt.Errorf("storage: create upload directory: %w", err)
+		}
+		if err := os.Chmod(absoluteUploads, 0o700); err != nil {
+			return nil, fmt.Errorf("storage: restrict upload directory permissions: %w", err)
 		}
 	}
 
@@ -86,6 +89,9 @@ func OpenWithUploads(ctx context.Context, path, uploadsPath string) (*DB, error)
 		if _, err := sqlDB.ExecContext(ctx, "PRAGMA journal_mode = WAL"); err != nil {
 			return closeOnError(fmt.Errorf("storage: enable WAL: %w", err))
 		}
+		if err := restrictSQLiteFilePermissions(path); err != nil {
+			return closeOnError(err)
+		}
 	}
 
 	migrationMu.Lock()
@@ -105,12 +111,26 @@ func OpenWithUploads(ctx context.Context, path, uploadsPath string) (*DB, error)
 	if migrationErr != nil {
 		return closeOnError(migrationErr)
 	}
+	if path != ":memory:" {
+		if err := restrictSQLiteFilePermissions(path); err != nil {
+			return closeOnError(err)
+		}
+	}
 
 	queries := generated.New(sqlDB)
 	if err := queries.DeleteExpiredSessions(ctx, time.Now().Unix()); err != nil {
 		return closeOnError(fmt.Errorf("storage: clean expired sessions: %w", err))
 	}
 	return &DB{SQL: sqlDB, Queries: queries, UploadDir: absoluteUploads}, nil
+}
+
+func restrictSQLiteFilePermissions(path string) error {
+	for _, file := range []string{path, path + "-wal", path + "-shm"} {
+		if err := os.Chmod(file, 0o600); err != nil && !os.IsNotExist(err) {
+			return fmt.Errorf("storage: restrict SQLite file permissions for %q: %w", file, err)
+		}
+	}
+	return nil
 }
 
 func (db *DB) Close() error {

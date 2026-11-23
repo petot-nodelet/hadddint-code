@@ -19,8 +19,8 @@ type LandingData struct {
 
 templ Hero() {
 	<section class="relative overflow-hidden">
-		<div class="mx-auto grid max-w-6xl items-center gap-12 px-4 py-20 sm:px-6 lg:grid-cols-2 lg:py-28">
-			<div>
+		<div class="mx-auto grid min-w-0 max-w-6xl items-center gap-12 px-4 py-20 sm:px-6 lg:grid-cols-2 lg:py-28">
+			<div class="min-w-0">
 				<p class="text-xs font-semibold uppercase tracking-[0.3em] text-gold">Digital Wedding Invitation</p>
 				<h1 class="mt-4 font-serif text-4xl leading-tight sm:text-5xl">
 					Undangan pernikahan <span class="script text-gold">elegan</span> dalam hitungan menit
@@ -35,7 +35,7 @@ templ Hero() {
 				</div>
 				<p class="mt-6 text-sm text-ink-muted">✓ Responsive smartphone ✓ Link personal ✓ Bagikan via WhatsApp</p>
 			</div>
-			<div class="relative mx-auto w-full max-w-sm">
+			<div class="relative mx-auto w-full min-w-0 max-w-sm">
 				<div class="phone-frame">
 					<div class="phone-screen bg-cover bg-center" style="background-image:url('/index/photo-1511285560929-80b456fea0bc.jpg')">
 						<div class="flex h-full flex-col items-center justify-center bg-ink/40 text-center text-canvas">
@@ -190,17 +190,17 @@ type NavProps struct {
 
 templ Navbar(props NavProps) {
 	<nav class="sticky top-0 z-50 bg-canvas/90 backdrop-blur border-b border-line">
-		<div class="mx-auto flex max-w-6xl items-center justify-between px-4 py-3 sm:px-6">
+		<div class="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-3 sm:px-6">
 			<a href="/" class="flex items-baseline gap-1">
 				<span class="font-serif text-xl font-semibold tracking-wide text-ink">SUKAMOTO</span>
 				<span class="hidden text-xs uppercase tracking-[0.25em] text-gold sm:inline">wedding</span>
 			</a>
-			<div class="flex items-center gap-4 text-sm sm:gap-6">
+			<div class="flex items-center gap-2 text-xs sm:gap-6 sm:text-sm">
 				<a href="/" class="nav-link hidden md:inline">Home</a>
 				<a href="/templates" class="nav-link hidden sm:inline">Templates</a>
 				<a href="/#pricing" class="nav-link hidden sm:inline">Pricing</a>
 				<a href="/#how" class="nav-link hidden md:inline">How It Works</a>
-				<a href="/track" class="nav-link">Cek Pesanan</a>
+				<a href="/track" class="nav-link"><span class="sm:hidden">Lacak</span><span class="hidden sm:inline">Cek Pesanan</span></a>
 				if props.IsAdmin {
 					<a href="/admin" class="nav-link">Admin</a>
 					<form method="post" action="/logout" class="inline">

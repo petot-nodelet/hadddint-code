@@ -9,7 +9,6 @@
   }
 
   body {
-    min-width: 320px;
     background: #09090b;
     font-family: "Plus Jakarta Sans", sans-serif;
   }
@@ -98,7 +97,7 @@
   }
 
   .phone-frame {
-    @apply aspect-[9/16] w-64 rounded-[2.5rem] border-4 border-[#333338] bg-canvas p-2 shadow-2xl;
+    @apply aspect-[9/16] w-full max-w-64 rounded-[2.5rem] border-4 border-[#333338] bg-canvas p-2 shadow-2xl;
   }
 
   .phone-screen {

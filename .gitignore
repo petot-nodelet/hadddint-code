@@ -1,0 +1,20 @@
+# Node dependencies
+app/node_modules/
+
+# Local SQLite database & WAL files
+app/data/*.db
+app/data/*.db-shm
+app/data/*.db-wal
+
+# Local user uploads
+app/data/uploads/
+
+# Local temporary / output files
+hasil.txt
+out.md
+
+# Environment & OS files
+.env
+.env.*
+!.env.example
+.DS_Store

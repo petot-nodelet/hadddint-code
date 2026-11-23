@@ -31,7 +31,7 @@ import (
 var csrfInput = regexp.MustCompile(`name="csrf_token" value="([a-f0-9]{64})"`)
 var nextInput = regexp.MustCompile(`name="next" value="([^"]*)"`)
 var testOrderNumber = regexp.MustCompile(`SKM-ORD-[0-9]{8}-[A-Z2-7]{8}`)
-var testTrackingCode = regexp.MustCompile(`SKM-[A-Z2-7]{4}-[A-Z2-7]{4}`)
+var testTrackingCode = regexp.MustCompile(`SKM-[A-Z2-7]{4}-[A-Z2-7]{4}-[A-Z2-7]{4}`)
 
 func testServer(t *testing.T) (*storage.DB, *httptest.Server) {
 	t.Helper()
@@ -644,6 +644,7 @@ func TestPaymentProofRejectsInvalidFilesAndOversize(t *testing.T) {
 		{name: "unsupported extension", filename: "proof.exe", contentType: "application/octet-stream", data: []byte("not an image"), wantStatus: http.StatusBadRequest},
 		{name: "MIME mismatch", filename: "proof.png", contentType: "image/jpeg", data: validPNG(t), wantStatus: http.StatusBadRequest},
 		{name: "invalid signature", filename: "proof.png", contentType: "image/png", data: []byte("not an image"), wantStatus: http.StatusBadRequest},
+		{name: "invalid webp payload", filename: "proof.webp", contentType: "image/webp", data: []byte("RIFF\x04\x00\x00\x00WEBP"), wantStatus: http.StatusBadRequest},
 		{name: "oversized image", filename: "large.png", contentType: "image/png", data: append(validPNG(t), bytes.Repeat([]byte{0}, maxPaymentProofSize)...), wantStatus: http.StatusRequestEntityTooLarge},
 	}
 	for _, test := range tests {
@@ -733,6 +734,9 @@ func TestGuestOrderCreationAndTracking(t *testing.T) {
 	}
 	if response.StatusCode != http.StatusOK || !strings.HasSuffix(response.Request.URL.Path, "/track/"+trackingCode) {
 		t.Fatalf("tracking lookup ended at %s with status %d", response.Request.URL, response.StatusCode)
+	}
+	if response.Header.Get("Cache-Control") != "no-store" || response.Header.Get("Referrer-Policy") != "no-referrer" {
+		t.Fatal("tracking response is missing private-cache/referrer protections")
 	}
 	for _, private := range []string{"Senja Tester", "senja@example.com"} {
 		if strings.Contains(string(trackingPage), private) {

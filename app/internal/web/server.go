@@ -26,6 +26,24 @@ type Server struct {
 	trackLimiter  *trackLimiter
 }
 
+type redactingLogFormatter struct {
+	formatter *middleware.DefaultLogFormatter
+}
+
+func (f redactingLogFormatter) NewLogEntry(r *http.Request) middleware.LogEntry {
+	if strings.HasPrefix(r.URL.Path, "/track/") {
+		redacted := r.Clone(r.Context())
+		redacted.URL = new(url.URL)
+		*redacted.URL = *r.URL
+		redacted.URL.Path = "/track/{code}"
+		redacted.URL.RawPath = ""
+		redacted.URL.RawQuery = ""
+		redacted.RequestURI = "/track/{code}"
+		r = redacted
+	}
+	return f.formatter.NewLogEntry(r)
+}
+
 func NewServer(db *storage.DB, manager *auth.Manager, staticDir string) (*Server, error) {
 	if db == nil || manager == nil {
 		return nil, fmt.Errorf("web: database and auth manager are required")
@@ -46,7 +64,9 @@ func NewServer(db *storage.DB, manager *auth.Manager, staticDir string) (*Server
 func (s *Server) Routes() http.Handler {
 	r := chi.NewRouter()
 	r.Use(middleware.RequestID)
-	r.Use(middleware.Logger)
+	r.Use(middleware.RequestLogger(redactingLogFormatter{
+		formatter: &middleware.DefaultLogFormatter{Logger: log.Default(), NoColor: true},
+	}))
 	r.Use(middleware.Recoverer)
 	r.Use(middleware.Timeout(30 * time.Second))
 	r.Use(s.Auth.Session.LoadAndSave)

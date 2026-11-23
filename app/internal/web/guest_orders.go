@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"crypto/subtle"
 	"database/sql"
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"image"
@@ -260,8 +261,14 @@ func validatePaymentProof(ext string, data []byte, expectedType string) error {
 		if len(data) < 12 || string(data[:4]) != "RIFF" || string(data[8:12]) != "WEBP" {
 			return fmt.Errorf("invalid WEBP signature")
 		}
+		if uint64(binary.LittleEndian.Uint32(data[4:8]))+8 != uint64(len(data)) {
+			return fmt.Errorf("invalid WEBP RIFF length")
+		}
 	default:
 		return fmt.Errorf("unsupported image extension")
+	}
+	if http.DetectContentType(data) != expectedType {
+		return fmt.Errorf("image data does not match declared media type")
 	}
 	if ext != ".webp" {
 		config, format, err := image.DecodeConfig(bytes.NewReader(data))
@@ -319,6 +326,8 @@ func (s *Server) handleTrackSearch(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleTrackOrder(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Cache-Control", "no-store")
+	w.Header().Set("Referrer-Policy", "no-referrer")
 	if !s.trackLimiter.allow(r) {
 		http.Error(w, "Terlalu banyak percobaan. Coba kembali beberapa saat lagi.", http.StatusTooManyRequests)
 		return
