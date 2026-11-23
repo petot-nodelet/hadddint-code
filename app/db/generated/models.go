@@ -8,6 +8,28 @@ import (
 	"database/sql"
 )
 
+type InvitationMedium struct {
+	ID         int64  `json:"id"`
+	OrderID    int64  `json:"order_id"`
+	MediaType  string `json:"media_type"`
+	StoredName string `json:"stored_name"`
+	MimeType   string `json:"mime_type"`
+	SizeBytes  int64  `json:"size_bytes"`
+	Caption    string `json:"caption"`
+	SortOrder  int64  `json:"sort_order"`
+	CreatedAt  string `json:"created_at"`
+}
+
+type MusicTrack struct {
+	ID         int64  `json:"id"`
+	Title      string `json:"title"`
+	StoredName string `json:"stored_name"`
+	MimeType   string `json:"mime_type"`
+	SizeBytes  int64  `json:"size_bytes"`
+	IsActive   int64  `json:"is_active"`
+	CreatedAt  string `json:"created_at"`
+}
+
 type Notification struct {
 	ID        int64         `json:"id"`
 	UserID    int64         `json:"user_id"`
@@ -19,26 +41,29 @@ type Notification struct {
 }
 
 type Order struct {
-	ID              int64          `json:"id"`
-	UserID          sql.NullInt64  `json:"user_id"`
-	PackageID       string         `json:"package_id"`
-	TemplateID      string         `json:"template_id"`
-	Status          string         `json:"status"`
-	OrderNumber     sql.NullString `json:"order_number"`
-	TrackingCode    sql.NullString `json:"tracking_code"`
-	CustomerName    string         `json:"customer_name"`
-	CustomerContact string         `json:"customer_contact"`
-	PublicName      string         `json:"public_name"`
-	PriceCents      int64          `json:"price_cents"`
-	PaymentStatus   string         `json:"payment_status"`
-	WorkStatus      string         `json:"work_status"`
-	PublicNote      string         `json:"public_note"`
-	InternalNote    string         `json:"internal_note"`
-	InvitationSlug  sql.NullString `json:"invitation_slug"`
-	DraftData       string         `json:"draft_data"`
-	DraftAccessHash []byte         `json:"draft_access_hash"`
-	CreatedAt       string         `json:"created_at"`
-	UpdatedAt       string         `json:"updated_at"`
+	ID                     int64          `json:"id"`
+	UserID                 sql.NullInt64  `json:"user_id"`
+	PackageID              string         `json:"package_id"`
+	TemplateID             string         `json:"template_id"`
+	Status                 string         `json:"status"`
+	OrderNumber            sql.NullString `json:"order_number"`
+	TrackingCode           sql.NullString `json:"tracking_code"`
+	CustomerName           string         `json:"customer_name"`
+	CustomerContact        string         `json:"customer_contact"`
+	PublicName             string         `json:"public_name"`
+	PriceCents             int64          `json:"price_cents"`
+	PaymentStatus          string         `json:"payment_status"`
+	WorkStatus             string         `json:"work_status"`
+	PublicNote             string         `json:"public_note"`
+	InternalNote           string         `json:"internal_note"`
+	InvitationSlug         sql.NullString `json:"invitation_slug"`
+	DraftData              string         `json:"draft_data"`
+	DraftAccessHash        []byte         `json:"draft_access_hash"`
+	CreatedAt              string         `json:"created_at"`
+	UpdatedAt              string         `json:"updated_at"`
+	DraftVersion           int64          `json:"draft_version"`
+	InvitationReviewStatus string         `json:"invitation_review_status"`
+	InvitationReviewNote   string         `json:"invitation_review_note"`
 }
 
 type OrderStatusHistory struct {

@@ -20,8 +20,8 @@ import (
 type DB struct {
 	SQL     *sql.DB
 	Queries *generated.Queries
-	// UploadDir is the private filesystem directory holding payment proof
-	// images. It is never served directly over HTTP.
+	// UploadDir is the private root for payment proofs, invitation media, and
+	// admin-managed music. It is never served directly over HTTP.
 	UploadDir string
 }
 
@@ -33,8 +33,8 @@ func Open(ctx context.Context, path string) (*DB, error) {
 	return OpenWithUploads(ctx, path, "")
 }
 
-// OpenWithUploads opens SQLite and configures the private payment proof
-// directory. An empty uploads path disables filesystem-backed payments.
+// OpenWithUploads opens SQLite and configures the private upload root. An
+// empty uploads path disables filesystem-backed uploads.
 func OpenWithUploads(ctx context.Context, path, uploadsPath string) (*DB, error) {
 	if path == "" {
 		return nil, fmt.Errorf("storage: database path cannot be empty")

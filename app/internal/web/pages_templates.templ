@@ -51,11 +51,36 @@ type PreviewConfig struct {
 }
 
 type InvitationSample struct {
-	Couple     string `json:"couple"`
-	Subheading string `json:"subheading"`
-	Date       string `json:"date"`
-	Location   string `json:"location"`
-	Thumbnail  string `json:"thumbnail"`
+	Title        string `json:"title"`
+	Couple       string `json:"couple"`
+	Subheading   string `json:"subheading"`
+	Date         string `json:"date"`
+	Location     string `json:"location"`
+	Thumbnail    string `json:"thumbnail"`
+	Story        string `json:"story"`
+	Quote        string `json:"quote"`
+	QuoteSource  string `json:"quote_source"`
+	Prayer       string `json:"prayer"`
+	Gallery      []string
+	Events       []InvitationEventSample
+	Videos       []InvitationVideoSample
+	Greeting     string
+	RSVP         string
+	Guestbook    string
+	Envelope     string
+	MusicURL     string
+}
+
+type InvitationEventSample struct {
+	Name     string
+	Date     string
+	Location string
+	Address  string
+}
+
+type InvitationVideoSample struct {
+	Title string
+	URL   string
 }
 
 type TemplateDetailData struct {
@@ -235,7 +260,11 @@ templ InvitationPreview(config PreviewConfig, sample InvitationSample) {
 			<img class="absolute inset-0 h-full w-full object-cover" src={ sample.Thumbnail } alt={ sample.Couple } loading="lazy"/>
 			<div class="absolute inset-0 bg-black/55"></div>
 			<div class="preview-copy relative z-10">
-				<p class="text-[0.65rem] uppercase tracking-[0.35em]">The Wedding of</p>
+				if sample.Title != "" {
+					<p class="text-[0.65rem] uppercase tracking-[0.35em]">{ sample.Title }</p>
+				} else {
+					<p class="text-[0.65rem] uppercase tracking-[0.35em]">The Wedding of</p>
+				}
 				<p class="preview-couple mt-3 text-5xl">{ sample.Couple }</p>
 				<p class="preview-subheading mt-4 text-xs uppercase tracking-[0.2em]">{ sample.Subheading }</p>
 				<div class="mx-auto my-5 h-px w-12 bg-[var(--preview-accent)]"></div>
@@ -248,11 +277,30 @@ templ InvitationPreview(config PreviewConfig, sample InvitationSample) {
 			for _, section := range config.Sections {
 				<div class="preview-section rounded-xl p-4">
 					<p class="preview-section-title text-xs font-semibold uppercase tracking-[0.2em]">{ sectionLabel(section) }</p>
-					if section == "couple" || section == "story" {
+					if section == "couple" {
 						<p class="preview-couple mt-2 text-3xl">{ sample.Couple }</p>
 						<p class="mt-2 text-xs leading-relaxed opacity-75">Dua hati, satu perjalanan, dan kisah yang akan terus tumbuh.</p>
+					} else if section == "story" && sample.Story != "" {
+						<p class="mt-2 whitespace-pre-line text-sm leading-relaxed">{ sample.Story }</p>
 					} else if section == "events" {
-						<p class="mt-2 text-xs">{ sample.Date } · { sample.Location }</p>
+						if len(sample.Events) > 0 {
+							for _, event := range sample.Events {
+								<div class="mt-3 rounded-lg border border-line p-3">
+									<p class="font-semibold">{ event.Name }</p>
+									<p class="mt-1 text-xs">{ event.Date }</p>
+									<p class="mt-1 text-xs">{ event.Location }</p>
+									<p class="mt-1 text-xs">{ event.Address }</p>
+								</div>
+							}
+						} else {
+							<p class="mt-2 text-xs">{ sample.Date } · { sample.Location }</p>
+						}
+					} else if section == "gallery" && len(sample.Gallery) > 0 {
+						<div class="mt-3 grid grid-cols-2 gap-2">
+							for _, image := range sample.Gallery {
+								<img class="aspect-square w-full rounded-lg object-cover" src={ image } alt="Foto galeri draft" loading="lazy"/>
+							}
+						</div>
 					} else if section == "gallery" && len(config.Media.Gallery) > 0 {
 						<div class="mt-3 grid grid-cols-2 gap-2">
 							for _, image := range config.Media.Gallery {
@@ -262,6 +310,47 @@ templ InvitationPreview(config PreviewConfig, sample InvitationSample) {
 					} else {
 						<p class="mt-2 text-xs leading-relaxed opacity-75">Contoh pratinjau undangan dalam tampilan mobile.</p>
 					}
+				</div>
+			}
+			if sample.Quote != "" || sample.Prayer != "" {
+				<div class="preview-section rounded-xl p-4">
+					<p class="preview-section-title text-xs font-semibold uppercase tracking-[0.2em]">Kutipan &amp; doa</p>
+					if sample.Quote != "" {
+						<blockquote class="mt-3 whitespace-pre-line text-sm italic">{ sample.Quote }</blockquote>
+						if sample.QuoteSource != "" {
+							<p class="mt-2 text-xs">{ sample.QuoteSource }</p>
+						}
+					}
+					if sample.Prayer != "" {
+						<p class="mt-3 whitespace-pre-line text-sm">{ sample.Prayer }</p>
+					}
+				</div>
+			}
+			if sample.Greeting != "" {
+				<div class="preview-section rounded-xl p-4"><p class="whitespace-pre-line text-sm">{ sample.Greeting }</p></div>
+			}
+			if sample.Videos != nil {
+				<div class="preview-section rounded-xl p-4">
+					<p class="preview-section-title text-xs font-semibold uppercase tracking-[0.2em]">Video</p>
+					for _, video := range sample.Videos {
+						<p class="mt-2 text-sm">{ video.Title }</p>
+						<a class="mt-1 block break-all text-xs underline" href={ templ.SafeURL(video.URL) } target="_blank" rel="noopener noreferrer">{ video.URL }</a>
+					}
+				</div>
+			}
+			if sample.RSVP != "" {
+				<div class="preview-section rounded-xl p-4"><p class="text-sm">{ sample.RSVP }</p></div>
+			}
+			if sample.Guestbook != "" {
+				<div class="preview-section rounded-xl p-4"><p class="text-sm">{ sample.Guestbook }</p></div>
+			}
+			if sample.Envelope != "" {
+				<div class="preview-section rounded-xl p-4"><p class="whitespace-pre-line text-sm">{ sample.Envelope }</p></div>
+			}
+			if sample.MusicURL != "" {
+				<div class="preview-section rounded-xl p-4">
+					<p class="preview-section-title text-xs font-semibold uppercase tracking-[0.2em]">Musik</p>
+					<audio class="mt-3 w-full" controls preload="none" src={ templ.SafeURL(sample.MusicURL) }></audio>
 				</div>
 			}
 		</div>

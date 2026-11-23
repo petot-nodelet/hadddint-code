@@ -19,7 +19,7 @@ bukti pembayaran. Konfigurasi dapat diubah dengan environment variable:
 | --- | --- | --- |
 | `SUKAMOTO_ADDR` | `:8080` | Alamat dan port HTTP |
 | `DATABASE_PATH` | `data/sukamoto.db` | Lokasi database SQLite |
-| `UPLOAD_DIR` | `data/uploads/payment-proofs` | Penyimpanan privat bukti pembayaran |
+| `UPLOAD_DIR` | `data/uploads/payment-proofs` | Root penyimpanan privat bukti pembayaran, media undangan, dan library musik admin |
 | `APP_ENV` | `development` | Gunakan `production` untuk cookie aman HTTPS |
 | `STATIC_DIR` | `..` | Direktori root aset statis |
 
@@ -50,9 +50,21 @@ SUKAMOTO_ADMIN_PASSWORD='password-kuat' /usr/local/go/bin/go run ./cmd/sukamoto-
   pembayaran, serta melacak status menggunakan kode pelacakan.
 - Admin dapat masuk melalui `/admin/login`, meninjau bukti pembayaran, dan
   memperbarui status pesanan.
+- Pemilik pesanan dapat membuka `/orders/{nomor-pesanan}/builder` pada perangkat
+  yang menyimpan cookie akses pesanan untuk menyunting 13 modul draft: informasi
+  dasar, sampul, kutipan/doa, kisah pasangan, acara/lokasi, galeri, video, musik,
+  RSVP, buku tamu, amplop digital, ucapan tamu, dan tampilan/tautan.
+- Penyimpanan modul memakai versi draft agar perubahan dari tab/perangkat lain
+  tidak saling menimpa. Upload foto dibatasi oleh kuota paket; setiap file media
+  maksimal 5 MiB dan disimpan privat. Kode tracking tetap hanya untuk membaca
+  status dan tidak dapat digunakan untuk mengedit draft.
+- Admin dapat meninjau draft di detail pesanan, mengatur status review, dan
+  mengelola pilihan musik di `/admin/music`. Admin harus memastikan hak
+  penggunaan audio sebelum mengunggahnya.
 - Halaman pelanggan berbasis akun lama dinonaktifkan; data akun dan pesanan
   lama tetap dipertahankan oleh migrasi.
 
-Editor data undangan modular, penegakan entitlement fitur per paket, dan
-publikasi/render undangan belum tersedia. Status `published` tidak berarti
-undangan publik dapat dibuat melalui aplikasi saat ini.
+Pratinjau undangan bersifat privat dan menampilkan draft yang sudah tersimpan.
+Builder belum menerbitkan undangan publik; endpoint publik, RSVP yang
+menyimpan jawaban, dan buku tamu publik belum tersedia. Status review `Siap
+ditinjau` tidak berarti undangan telah dipublikasikan.

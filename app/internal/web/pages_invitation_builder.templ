@@ -1,0 +1,176 @@
+package web
+
+import (
+	"fmt"
+	"net/url"
+)
+
+templ InvitationBuilderPage(data BuilderPageData) {
+	@Layout(data.Page, invitationBuilderContent(data))
+}
+
+templ invitationBuilderContent(data BuilderPageData) {
+	<section class="mx-auto max-w-6xl px-4 py-8 sm:px-6 sm:py-12">
+		<div class="flex flex-wrap items-start justify-between gap-4">
+			<div>
+				<a class="text-sm text-gold hover:underline" href={ templ.SafeURL("/orders/" + url.PathEscape(data.Order.OrderNumber)) }>Kembali ke pesanan</a>
+				<p class="mt-4 text-xs font-semibold uppercase tracking-[0.3em] text-gold">Builder undangan</p>
+				<h1 class="mt-2 font-serif text-3xl">{ data.Module.Title }</h1>
+				<p class="mt-2 text-sm text-ink-muted">{ data.Order.PackageName } · { data.Order.TemplateName } · Draft v{ fmt.Sprint(data.Order.DraftVersion) }</p>
+			</div>
+			<a class="btn btn-outline" href={ templ.SafeURL("/orders/" + url.PathEscape(data.Order.OrderNumber) + "/preview") }>Pratinjau privat</a>
+		</div>
+		if data.Error != "" {
+			<p role="alert" class="mt-5 rounded-lg border border-red-900 bg-red-950/50 p-3 text-sm text-red-200">{ data.Error }</p>
+		}
+		if data.Saved {
+			<p role="status" class="mt-5 rounded-lg border border-green-900 bg-green-950/40 p-3 text-sm text-green-200">Perubahan berhasil disimpan.</p>
+		}
+		<div class="mt-5 rounded-lg border border-line bg-sand p-4 text-sm">
+			<p>Status review: <strong>{ invitationReviewStatusLabel(data.Order.InvitationReviewStatus) }</strong></p>
+			if data.Order.InvitationReviewNote != "" {
+				<p class="mt-2 whitespace-pre-line">{ data.Order.InvitationReviewNote }</p>
+			}
+		</div>
+		<div class="mt-7 grid gap-6 lg:grid-cols-[16rem_minmax(0,1fr)]">
+			<nav aria-label="Modul undangan" class="card grid grid-cols-2 gap-2 p-3 sm:grid-cols-3 lg:block lg:space-y-2 lg:p-4">
+				for _, module := range data.Modules {
+					if module.Available {
+						<a class="block rounded-lg border border-line px-3 py-2 text-sm hover:border-gold" href={ templ.SafeURL("/orders/" + url.PathEscape(data.Order.OrderNumber) + "/builder/" + module.ID) }>
+							<span>{ module.Title }</span>
+							if module.Complete {
+								<span class="ml-1 text-xs text-green-700">· Selesai</span>
+							} else {
+								<span class="ml-1 text-xs text-ink-muted">· Belum diisi</span>
+							}
+						</a>
+					} else {
+						<div class="rounded-lg border border-line px-3 py-2 text-sm text-ink-muted">
+							<span>{ module.Title }</span>
+							<span class="ml-1 text-xs">· Paket lain</span>
+						</div>
+					}
+				}
+			</nav>
+			<div class="space-y-6">
+				<div class="card p-5 sm:p-7">
+					<h2 class="font-serif text-2xl">{ data.Module.Title }</h2>
+					<p class="mt-2 text-sm leading-relaxed text-ink-muted">{ builderDescription(data.Module.ID) }</p>
+					if !data.Module.Available {
+						<p class="mt-4 rounded-lg border border-line bg-sand p-4 text-sm">Modul ini tidak dapat diedit dengan paket pesanan saat ini.</p>
+					} else {
+						<form method="post" action={ templ.SafeURL("/orders/" + url.PathEscape(data.Order.OrderNumber) + "/builder/" + data.Module.ID) } class="mt-6 space-y-4">
+							<input type="hidden" name="csrf_token" value={ data.Page.CSRF }/>
+							<input type="hidden" name="draft_version" value={ fmt.Sprint(data.Order.DraftVersion) }/>
+							for _, field := range data.Fields {
+								@builderInput(field, "field_"+field.Key)
+							}
+							if len(data.Items) > 0 {
+								<input type="hidden" name="item_count" value={ fmt.Sprint(len(data.Items)) }/>
+								for index, item := range data.Items {
+									<fieldset class="space-y-4 rounded-xl border border-line p-4">
+										<legend class="px-2 text-sm font-semibold">Item { fmt.Sprint(index + 1) }</legend>
+										for _, field := range item.Fields {
+											@builderInput(field, fmt.Sprintf("item_%d_%s", index, field.Key))
+										}
+									</fieldset>
+								}
+							}
+							<button class="btn btn-primary w-full sm:w-auto" type="submit">Simpan modul</button>
+						</form>
+					}
+				</div>
+				<div class="card p-5 sm:p-7">
+					<h2 class="font-serif text-xl">Media pesanan</h2>
+					<p class="mt-2 text-sm text-ink-muted">Gambar JPEG, PNG, atau WEBP dan audio MP3/OGG maksimal 5 MiB per file. File disimpan privat dan hanya dapat dibuka dengan akses pesanan ini.</p>
+					<form method="post" enctype="multipart/form-data" action={ templ.SafeURL("/orders/" + url.PathEscape(data.Order.OrderNumber) + "/builder/media") } class="mt-4 grid gap-3 sm:grid-cols-[12rem_minmax(0,1fr)_auto]">
+						<input type="hidden" name="csrf_token" value={ data.Page.CSRF }/>
+						<label class="form-label">
+							<span>Jenis media</span>
+							<select class="form-input" name="media_type" required>
+								<option value="gallery">Foto galeri</option>
+								<option value="cover">Foto sampul</option>
+								<option value="story">Foto kisah</option>
+								<option value="portrait">Foto pasangan</option>
+								<option value="audio">Audio kustom (paket tertentu)</option>
+							</select>
+						</label>
+						<label class="form-label">
+							<span>File</span>
+							<input class="form-input" type="file" name="media" accept="image/jpeg,image/png,image/webp,audio/mpeg,audio/ogg" required/>
+						</label>
+						<button class="btn btn-outline sm:mt-6" type="submit">Unggah</button>
+					</form>
+					if len(data.Media) == 0 {
+						<p class="mt-4 text-sm text-ink-muted">Belum ada media pada pesanan ini.</p>
+					} else {
+						<ul class="mt-5 divide-y divide-line">
+							for _, media := range data.Media {
+								<li class="flex flex-wrap items-center justify-between gap-3 py-3">
+									<div>
+										<p class="text-sm font-semibold">{ media.MediaType } · #{ fmt.Sprint(media.ID) }</p>
+										<p class="text-xs text-ink-muted">{ media.MimeType } · { fmt.Sprint(media.SizeBytes) } bytes</p>
+									</div>
+									<a class="text-sm text-gold hover:underline" href={ templ.SafeURL(fmt.Sprintf("/orders/%s/builder/media/%d", url.PathEscape(data.Order.OrderNumber), media.ID)) }>Buka privat</a>
+									<form method="post" action={ templ.SafeURL(fmt.Sprintf("/orders/%s/builder/media/%d/delete", url.PathEscape(data.Order.OrderNumber), media.ID)) }>
+										<input type="hidden" name="csrf_token" value={ data.Page.CSRF }/>
+										<input type="hidden" name="draft_version" value={ fmt.Sprint(data.Order.DraftVersion) }/>
+										<button class="text-sm text-red-700 hover:underline" type="submit">Hapus</button>
+									</form>
+								</li>
+							}
+						</ul>
+					}
+				</div>
+			</div>
+		</div>
+	</section>
+}
+
+templ builderInput(field BuilderField, name string) {
+	<label class="form-label">
+		<span>{ field.Label }</span>
+		if field.Type == "textarea" {
+			<textarea class="form-input min-h-24" name={ name } maxlength={ fmt.Sprint(field.MaxLength) }>{ field.Value }</textarea>
+		} else if field.Type == "select" || field.Type == "track" {
+			<select class="form-input" name={ name }>
+				<option value="">Pilih opsi</option>
+				for _, option := range field.Options {
+					if option.Value == field.Value {
+						<option value={ option.Value } selected>{ option.Label }</option>
+					} else {
+						<option value={ option.Value }>{ option.Label }</option>
+					}
+				}
+			</select>
+		} else if field.Type == "media" || field.Type == "audio" {
+			<select class="form-input" name={ name }>
+				<option value="">Tidak dipilih</option>
+				for _, option := range field.MediaOptions {
+					if option.MediaID == field.Value {
+						<option value={ option.MediaID } selected>{ option.Label }</option>
+					} else {
+						<option value={ option.MediaID }>{ option.Label }</option>
+					}
+				}
+			</select>
+		} else {
+			<input class="form-input" type={ builderHTMLInputType(field.Type) } name={ name } value={ field.Value } maxlength={ fmt.Sprint(field.MaxLength) }/>
+		}
+	</label>
+}
+
+templ InvitationPreviewPage(data BuilderPageData, config PreviewConfig, sample InvitationSample) {
+	@Layout(data.Page, invitationPreviewContent(data, config, sample))
+}
+
+templ invitationPreviewContent(data BuilderPageData, config PreviewConfig, sample InvitationSample) {
+	<section class="mx-auto max-w-4xl px-4 py-8 sm:px-6 sm:py-12">
+		<a class="text-sm text-gold hover:underline" href={ templ.SafeURL("/orders/" + url.PathEscape(data.Order.OrderNumber) + "/builder/basic") }>Kembali ke editor</a>
+		<h1 class="mt-4 font-serif text-3xl">Pratinjau privat</h1>
+		<p class="mt-2 text-sm text-ink-muted">Perubahan yang tersimpan ditampilkan di sini. Pratinjau ini tidak menerbitkan undangan.</p>
+		<div class="mt-7">
+			@InvitationPreview(config, sample)
+		</div>
+	</section>
+}

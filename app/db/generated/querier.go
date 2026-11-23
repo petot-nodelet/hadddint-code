@@ -11,6 +11,8 @@ import (
 
 type Querier interface {
 	CommitSession(ctx context.Context, arg CommitSessionParams) error
+	CountInvitationAudio(ctx context.Context, orderID int64) (int64, error)
+	CountInvitationMediaByType(ctx context.Context, orderID int64) (int64, error)
 	CountTemplates(ctx context.Context, arg CountTemplatesParams) (int64, error)
 	CreateGuestOrder(ctx context.Context, arg CreateGuestOrderParams) (int64, error)
 	CreateNotification(ctx context.Context, arg CreateNotificationParams) error
@@ -18,11 +20,17 @@ type Querier interface {
 	CreatePayment(ctx context.Context, arg CreatePaymentParams) (int64, error)
 	CreateUser(ctx context.Context, arg CreateUserParams) (int64, error)
 	DeleteExpiredSessions(ctx context.Context, expiresAt int64) error
+	DeleteInvitationMedia(ctx context.Context, arg DeleteInvitationMediaParams) (int64, error)
 	DeleteSession(ctx context.Context, id string) error
 	FindSession(ctx context.Context, arg FindSessionParams) ([]byte, error)
 	GetActivePaymentMethod(ctx context.Context, id string) (GetActivePaymentMethodRow, error)
+	GetAdminInvitationDraft(ctx context.Context, orderNumber sql.NullString) (GetAdminInvitationDraftRow, error)
 	GetAdminOrderByNumber(ctx context.Context, orderNumber sql.NullString) (GetAdminOrderByNumberRow, error)
 	GetGuestOrderByNumber(ctx context.Context, orderNumber sql.NullString) (GetGuestOrderByNumberRow, error)
+	GetInvitationDraftByOrderNumber(ctx context.Context, orderNumber sql.NullString) (GetInvitationDraftByOrderNumberRow, error)
+	GetInvitationMedia(ctx context.Context, arg GetInvitationMediaParams) (InvitationMedium, error)
+	GetInvitationPackageFeatures(ctx context.Context, packageID string) (GetInvitationPackageFeaturesRow, error)
+	GetMusicTrack(ctx context.Context, id int64) (MusicTrack, error)
 	GetOrderByIDForUser(ctx context.Context, arg GetOrderByIDForUserParams) (GetOrderByIDForUserRow, error)
 	GetOrderForUpdateTx(ctx context.Context, arg GetOrderForUpdateTxParams) (GetOrderForUpdateTxRow, error)
 	GetOrderNumberByPaymentID(ctx context.Context, id int64) (sql.NullString, error)
@@ -36,7 +44,13 @@ type Querier interface {
 	GetTrackedOrderByCode(ctx context.Context, trackingCode sql.NullString) (GetTrackedOrderByCodeRow, error)
 	GetUserByEmail(ctx context.Context, email string) (GetUserByEmailRow, error)
 	GetUserByID(ctx context.Context, id int64) (GetUserByIDRow, error)
+	InsertInvitationMedia(ctx context.Context, arg InsertInvitationMediaParams) (int64, error)
+	InsertMusicTrack(ctx context.Context, arg InsertMusicTrackParams) (int64, error)
+	IsInvitationSlugAvailable(ctx context.Context, arg IsInvitationSlugAvailableParams) (bool, error)
+	ListActiveMusicTracks(ctx context.Context) ([]MusicTrack, error)
 	ListActivePaymentMethods(ctx context.Context) ([]ListActivePaymentMethodsRow, error)
+	ListInvitationMedia(ctx context.Context, orderID int64) ([]InvitationMedium, error)
+	ListMusicTracks(ctx context.Context) ([]MusicTrack, error)
 	ListNotificationsForUser(ctx context.Context, userID int64) ([]Notification, error)
 	ListOrdersForAdmin(ctx context.Context, arg ListOrdersForAdminParams) ([]ListOrdersForAdminRow, error)
 	ListOrdersForUserWithPayments(ctx context.Context, userID sql.NullInt64) ([]ListOrdersForUserWithPaymentsRow, error)
@@ -51,12 +65,16 @@ type Querier interface {
 	RecordPaymentReview(ctx context.Context, arg RecordPaymentReviewParams) error
 	RejectPayment(ctx context.Context, arg RejectPaymentParams) (int64, error)
 	SaveGuestPaymentProof(ctx context.Context, arg SaveGuestPaymentProofParams) (int64, error)
+	SaveInvitationDraft(ctx context.Context, arg SaveInvitationDraftParams) (int64, error)
+	SetMusicTrackActive(ctx context.Context, arg SetMusicTrackActiveParams) (int64, error)
 	SetOrderPaymentPaid(ctx context.Context, id int64) (int64, error)
 	SetOrderPaymentRejected(ctx context.Context, id int64) (int64, error)
 	SetOrderPaymentSubmitted(ctx context.Context, id int64) (int64, error)
 	SetOrderStatusIfTx(ctx context.Context, arg SetOrderStatusIfTxParams) (int64, error)
 	SetOrderWorkStatus(ctx context.Context, arg SetOrderWorkStatusParams) (int64, error)
 	TemplateSupportsPackage(ctx context.Context, arg TemplateSupportsPackageParams) (bool, error)
+	UpdateInvitationMediaCaption(ctx context.Context, arg UpdateInvitationMediaCaptionParams) (int64, error)
+	UpdateInvitationReview(ctx context.Context, arg UpdateInvitationReviewParams) (int64, error)
 	UpdateOrderInternalNote(ctx context.Context, arg UpdateOrderInternalNoteParams) (int64, error)
 	UpdateOrderPublicNote(ctx context.Context, arg UpdateOrderPublicNoteParams) (int64, error)
 	VerifyPayment(ctx context.Context, arg VerifyPaymentParams) (int64, error)

@@ -155,7 +155,7 @@ func adminDashboardContent(name string) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 7, "</h1><p class=\"mt-4 text-ink-muted\">Kelola pesanan dan verifikasi pembayaran dari satu tempat.</p><a href=\"/admin/orders\" class=\"btn btn-primary mt-7\">Lihat pesanan</a></section>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 7, "</h1><p class=\"mt-4 text-ink-muted\">Kelola pesanan dan verifikasi pembayaran dari satu tempat.</p><a href=\"/admin/orders\" class=\"btn btn-primary mt-7\">Lihat pesanan</a> <a href=\"/admin/music\" class=\"btn btn-outline ml-2 mt-7\">Kelola musik</a></section>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}

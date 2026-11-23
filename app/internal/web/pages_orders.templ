@@ -64,6 +64,7 @@ templ orderCheckoutContent(data OrderCheckoutData) {
 			</div>
 			<p class="text-sm text-ink-muted">Simpan kode pelacakan untuk melihat perkembangan pesanan dari perangkat lain. Kode ini hanya untuk melihat status, bukan untuk mengubah data atau mengirim bukti pembayaran.</p>
 			<a href={ templ.SafeURL("/track/" + url.PathEscape(data.Order.TrackingCode)) } class="text-sm text-gold hover:underline">Buka halaman pelacakan</a>
+			<a href={ templ.SafeURL("/orders/" + url.PathEscape(data.Order.OrderNumber) + "/builder") } class="btn btn-primary mt-4 w-full">Atur draft undangan</a>
 		</div>
 		if data.Order.PaymentStatus == "payment_submitted" {
 			<div class="card mt-6 p-5">
@@ -256,6 +257,7 @@ templ adminOrderDetailContent(data AdminOrderPageData) {
 		<a href="/admin/orders" class="text-sm text-gold hover:underline">← Kembali ke pesanan</a>
 		<p class="mt-6 text-xs font-semibold uppercase tracking-[0.3em] text-gold">Detail pesanan</p>
 		<h1 class="mt-2 font-serif text-3xl">{ data.Order.OrderNumber }</h1>
+		<a class="btn btn-outline mt-4" href={ templ.SafeURL("/admin/orders/" + url.PathEscape(data.Order.OrderNumber) + "/invitation") }>Lihat draft undangan</a>
 		if data.Error != "" {
 			<p role="alert" class="mt-5 rounded-lg border border-red-900 bg-red-950/50 p-3 text-sm text-red-200">{ data.Error }</p>
 		}
