@@ -5,7 +5,11 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"os"
+	"path/filepath"
+	"regexp"
 	"strings"
+	"time"
 
 	"github.com/sukamoto/app/db/generated"
 )
@@ -14,6 +18,8 @@ var (
 	ErrDraftConflict        = errors.New("invitation draft was changed by another request")
 	ErrInvitationMediaLimit = errors.New("invitation media limit reached")
 )
+
+var storedInvitationMediaName = regexp.MustCompile(`^[a-f0-9]{36}\.(jpg|png|webp|mp3|ogg)$`)
 
 type InvitationOrder struct {
 	ID                     int64
@@ -140,6 +146,38 @@ func (db *DB) SaveInvitationDraft(ctx context.Context, orderID, expectedVersion 
 	return nil
 }
 
+func (db *DB) SaveInvitationMediaDetails(ctx context.Context, orderID, mediaID, expectedVersion int64, draftJSON, slug, caption string, sortOrder int64) error {
+	tx, err := db.SQL.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("begin invitation media details transaction: %w", err)
+	}
+	defer tx.Rollback()
+	q := db.Queries.WithTx(tx)
+	rows, err := q.SaveInvitationDraft(ctx, generated.SaveInvitationDraftParams{
+		DraftData: draftJSON, InvitationSlug: sql.NullString{String: strings.TrimSpace(slug), Valid: strings.TrimSpace(slug) != ""},
+		ID: orderID, DraftVersion: expectedVersion,
+	})
+	if err != nil {
+		return fmt.Errorf("save draft with invitation media details: %w", err)
+	}
+	if rows != 1 {
+		return ErrDraftConflict
+	}
+	rows, err = q.UpdateInvitationMediaCaption(ctx, generated.UpdateInvitationMediaCaptionParams{
+		Caption: caption, SortOrder: sortOrder, ID: mediaID, OrderID: orderID,
+	})
+	if err != nil {
+		return fmt.Errorf("update invitation media details: %w", err)
+	}
+	if rows != 1 {
+		return ErrNotFound
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("commit invitation media details: %w", err)
+	}
+	return nil
+}
+
 func (db *DB) ListInvitationMedia(ctx context.Context, orderID int64) ([]InvitationMedia, error) {
 	rows, err := db.Queries.ListInvitationMedia(ctx, orderID)
 	if err != nil {
@@ -261,6 +299,61 @@ func (db *DB) SaveInvitationMediaCaption(ctx context.Context, orderID, mediaID i
 	}
 	if rows == 0 {
 		return ErrNotFound
+	}
+	return nil
+}
+
+func (db *DB) CleanupOrphanedInvitationMedia(ctx context.Context, olderThan time.Duration) error {
+	if db.UploadDir == "" {
+		return nil
+	}
+	directory := filepath.Join(db.UploadDir, "invitation-media")
+	entries, err := os.ReadDir(directory)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("read invitation media directory: %w", err)
+	}
+	rows, err := db.SQL.QueryContext(ctx, "SELECT stored_name FROM invitation_media")
+	if err != nil {
+		return fmt.Errorf("list stored invitation media: %w", err)
+	}
+	referenced := make(map[string]struct{})
+	for rows.Next() {
+		var name string
+		if err := rows.Scan(&name); err != nil {
+			rows.Close()
+			return fmt.Errorf("scan stored invitation media: %w", err)
+		}
+		referenced[name] = struct{}{}
+	}
+	if err := rows.Err(); err != nil {
+		rows.Close()
+		return fmt.Errorf("iterate stored invitation media: %w", err)
+	}
+	if err := rows.Close(); err != nil {
+		return fmt.Errorf("close stored invitation media query: %w", err)
+	}
+	cutoff := time.Now().Add(-olderThan)
+	for _, entry := range entries {
+		name := entry.Name()
+		if !storedInvitationMediaName.MatchString(name) || !entry.Type().IsRegular() {
+			continue
+		}
+		if _, ok := referenced[name]; ok {
+			continue
+		}
+		info, err := entry.Info()
+		if err != nil {
+			return fmt.Errorf("inspect orphaned invitation media %q: %w", name, err)
+		}
+		if info.ModTime().After(cutoff) {
+			continue
+		}
+		if err := os.Remove(filepath.Join(directory, name)); err != nil && !errors.Is(err, os.ErrNotExist) {
+			return fmt.Errorf("remove orphaned invitation media %q: %w", name, err)
+		}
 	}
 	return nil
 }

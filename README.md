@@ -54,10 +54,21 @@ SUKAMOTO_ADMIN_PASSWORD='password-kuat' /usr/local/go/bin/go run ./cmd/sukamoto-
   yang menyimpan cookie akses pesanan untuk menyunting 13 modul draft: informasi
   dasar, sampul, kutipan/doa, kisah pasangan, acara/lokasi, galeri, video, musik,
   RSVP, buku tamu, amplop digital, ucapan tamu, dan tampilan/tautan.
-- Penyimpanan modul memakai versi draft agar perubahan dari tab/perangkat lain
-  tidak saling menimpa. Upload foto dibatasi oleh kuota paket; setiap file media
-  maksimal 5 MiB dan disimpan privat. Kode tracking tetap hanya untuk membaca
-  status dan tidak dapat digunakan untuk mengedit draft.
+- Kisah, acara, galeri, dan video mendukung penambahan, penghapusan, dan
+  pengurutan item; batas foto, video, dan acara diperiksa kembali di backend
+  menggunakan entitlement pesanan. Draft disimpan otomatis setelah jeda singkat
+  dan tetap menyediakan tombol simpan manual.
+- Penyimpanan modul dan perubahan metadata media memakai versi draft agar
+  perubahan dari tab/perangkat lain tidak saling menimpa. Konflik autosave
+  menghentikan penyimpanan otomatis dan mempertahankan perubahan lokal di sesi
+  browser untuk pemulihan setelah memuat versi terbaru.
+- Media menampilkan pratinjau privat, pilihan untuk sampul/kisah/galeri, caption,
+  dan urutan. Upload dibatasi hingga 5 MiB, dialirkan ke file sementara dengan
+  permission privat, lalu divalidasi berdasarkan signature. File media yatim
+  berusia lebih dari 24 jam dibersihkan saat server dimulai; file yang masih
+  tercatat di database tidak dihapus.
+- Kode tracking tetap hanya untuk membaca status dan tidak dapat digunakan
+  untuk mengedit draft.
 - Admin dapat meninjau draft di detail pesanan, mengatur status review, dan
   mengelola pilihan musik di `/admin/music`. Admin harus memastikan hak
   penggunaan audio sebelum mengunggahnya.

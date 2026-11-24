@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"mime/multipart"
 	"net/http"
@@ -111,6 +112,254 @@ func TestInvitationBuilderRequiresOrderAccessAndSavesModulesIndependently(t *tes
 	response.Body.Close()
 	if response.StatusCode != http.StatusForbidden {
 		t.Fatalf("invalid CSRF token status = %d, want 403", response.StatusCode)
+	}
+}
+
+func TestInvitationBuilderDynamicItemsAutosaveAndVersionConflicts(t *testing.T) {
+	db, server := testServer(t)
+	client := newTestClient(t)
+	orderNumber, _, _ := createGuestOrderForTest(t, client, server, "S01", "silver")
+	moduleURL := server.URL + "/orders/" + orderNumber + "/builder/story"
+	response, err := client.Get(moduleURL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	page := readBody(t, response)
+	response.Body.Close()
+	if response.StatusCode != http.StatusOK ||
+		!strings.Contains(page, "data-item-add") ||
+		!strings.Contains(page, "data-item-template") ||
+		!strings.Contains(page, "Hapus item") ||
+		!strings.Contains(page, "Naikkan") ||
+		!strings.Contains(page, "invitation-builder.js") {
+		t.Fatalf("story builder has incomplete dynamic item controls: %s", page)
+	}
+	csrf := csrfInput.FindStringSubmatch(page)
+	if len(csrf) != 2 {
+		t.Fatal("builder page has no CSRF token")
+	}
+
+	saveAutosave := func(values url.Values) *http.Response {
+		t.Helper()
+		request, err := http.NewRequest(http.MethodPost, moduleURL, strings.NewReader(values.Encode()))
+		if err != nil {
+			t.Fatal(err)
+		}
+		request.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		request.Header.Set("X-CSRF-Token", csrf[1])
+		request.Header.Set("X-Builder-Autosave", "true")
+		response, err := client.Do(request)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return response
+	}
+	invalidItem := url.Values{
+		"draft_version": {"1"}, "item_count": {"1"},
+		"item_0_title": {strings.Repeat("x", 101)},
+	}
+	response = saveAutosave(invalidItem)
+	response.Body.Close()
+	if response.StatusCode != http.StatusBadRequest {
+		t.Fatalf("invalid story item status=%d, want 400", response.StatusCode)
+	}
+	first := url.Values{
+		"draft_version": {"1"}, "field_intro": {"Cerita kami"}, "item_count": {"2"},
+		"item_0_title": {"Pertemuan"}, "item_0_description": {"Awal cerita"},
+		"item_1_title": {"Lamaran"}, "item_1_description": {"Momen berikutnya"},
+	}
+	response = saveAutosave(first)
+	body := readBody(t, response)
+	response.Body.Close()
+	if response.StatusCode != http.StatusOK || !strings.Contains(body, `"version":2`) {
+		t.Fatalf("first autosave status=%d body=%s", response.StatusCode, body)
+	}
+
+	order, err := db.GetInvitationOrder(context.Background(), orderNumber)
+	if err != nil {
+		t.Fatal(err)
+	}
+	draft, err := decodeInvitationDraft(order.DraftData)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(draft.Modules["story"].Items) != 2 || draft.Modules["story"].Items[0]["title"] != "Pertemuan" {
+		t.Fatalf("multiple story items were not saved: %#v", draft.Modules["story"].Items)
+	}
+
+	reordered := url.Values{
+		"draft_version": {"2"}, "field_intro": {"Cerita kami"}, "item_count": {"2"},
+		"item_0_title": {"Lamaran"}, "item_0_description": {"Momen berikutnya"},
+		"item_1_title": {"Pertemuan"}, "item_1_description": {"Awal cerita"},
+	}
+	response = saveAutosave(reordered)
+	response.Body.Close()
+	if response.StatusCode != http.StatusOK {
+		t.Fatalf("reorder autosave status=%d", response.StatusCode)
+	}
+	order, err = db.GetInvitationOrder(context.Background(), orderNumber)
+	if err != nil {
+		t.Fatal(err)
+	}
+	draft, err = decodeInvitationDraft(order.DraftData)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if draft.Modules["story"].Items[0]["title"] != "Lamaran" {
+		t.Fatalf("story item order was not preserved: %#v", draft.Modules["story"].Items)
+	}
+
+	deleted := url.Values{
+		"draft_version": {"3"}, "field_intro": {"Cerita kami"}, "item_count": {"1"},
+		"item_0_title": {"Lamaran"}, "item_0_description": {"Momen berikutnya"},
+	}
+	response = saveAutosave(deleted)
+	response.Body.Close()
+	if response.StatusCode != http.StatusOK {
+		t.Fatalf("delete-item autosave status=%d", response.StatusCode)
+	}
+	order, err = db.GetInvitationOrder(context.Background(), orderNumber)
+	if err != nil {
+		t.Fatal(err)
+	}
+	draft, err = decodeInvitationDraft(order.DraftData)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(draft.Modules["story"].Items) != 1 || draft.Modules["story"].Items[0]["title"] != "Lamaran" {
+		t.Fatalf("deleted story item remains in saved draft: %#v", draft.Modules["story"].Items)
+	}
+
+	stale := url.Values{
+		"draft_version": {"3"}, "field_intro": {"stale"}, "item_count": {"0"},
+	}
+	response = saveAutosave(stale)
+	body = readBody(t, response)
+	response.Body.Close()
+	if response.StatusCode != http.StatusConflict || !strings.Contains(body, "versi") {
+		t.Fatalf("stale autosave status=%d body=%s, want 409", response.StatusCode, body)
+	}
+
+	eventsURL := server.URL + "/orders/" + orderNumber + "/builder/events"
+	csrf = csrfInput.FindStringSubmatch(page)
+	response = postForm(t, client, eventsURL, url.Values{
+		"csrf_token": {csrf[1]}, "draft_version": {strconv.FormatInt(order.DraftVersion, 10)},
+		"item_count": {"2"}, "item_0_name": {"Akad"}, "item_1_name": {"Resepsi"},
+	})
+	response.Body.Close()
+	if response.StatusCode != http.StatusBadRequest {
+		t.Fatalf("events beyond effective package limit status=%d, want 400", response.StatusCode)
+	}
+}
+
+func TestSilverAndGoldInvitationEntitlementsAndDatabaseLimits(t *testing.T) {
+	db, server := testServer(t)
+	for _, packageID := range []string{"silver", "gold"} {
+		client := newTestClient(t)
+		orderNumber, _, _ := createGuestOrderForTest(t, client, server, map[string]string{"silver": "S01", "gold": "G01"}[packageID], packageID)
+		order, err := db.GetInvitationOrder(context.Background(), orderNumber)
+		if err != nil {
+			t.Fatal(err)
+		}
+		features, err := db.GetInvitationFeatures(context.Background(), order.PackageID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		expectedPremium := packageID == "gold"
+		assertions := map[string]bool{
+			"couple story":     features.CoupleStory,
+			"background music": features.BackgroundMusic,
+			"RSVP":             features.RSVPEnabled,
+			"guestbook":        features.GuestbookEnabled,
+			"digital envelope": features.DigitalEnvelope,
+			"custom colors":    features.CustomColors,
+			"custom fonts":     features.CustomFonts,
+			"custom layout":    features.CustomLayout,
+			"custom URL":       features.CustomURL,
+			"custom sections":  features.CustomSections,
+			"custom music":     features.CustomMusic,
+		}
+		for name, enabled := range assertions {
+			want := true
+			if expectedPremium && (name == "couple story" || name == "background music" || name == "RSVP" || name == "guestbook" || name == "digital envelope") {
+				want = true
+			} else if !expectedPremium && (name == "custom colors" || name == "custom fonts" || name == "custom layout" || name == "custom URL" || name == "custom sections" || name == "custom music") {
+				want = false
+			}
+			if enabled != want {
+				t.Errorf("%s %s entitlement = %v, want %v", packageID, name, enabled, want)
+			}
+		}
+		moduleEntitlements := map[string]bool{
+			"story":     features.CoupleStory,
+			"music":     features.BackgroundMusic,
+			"rsvp":      features.RSVPEnabled,
+			"guestbook": features.GuestbookEnabled,
+			"envelope":  features.DigitalEnvelope,
+		}
+		for _, spec := range invitationModuleSpecs() {
+			if expected, hasEntitlement := moduleEntitlements[spec.id]; hasEntitlement {
+				if got := builderModuleAvailable(spec, features, order); got != expected {
+					t.Errorf("%s %s availability = %v, want %v", packageID, spec.id, got, expected)
+				}
+			}
+		}
+		settings, _ := findInvitationModule("settings")
+		visible := make(map[string]bool)
+		for _, field := range allowedBuilderFields(settings, features) {
+			visible[field.key] = true
+		}
+		for key, entitled := range map[string]bool{
+			"background":      features.CustomColors,
+			"heading_font":    features.CustomFonts,
+			"layout":          features.CustomLayout,
+			"slug":            features.CustomURL,
+			"section_gallery": features.CustomSections,
+		} {
+			if visible[key] != entitled {
+				t.Errorf("%s setting %s visibility = %v, entitlement = %v", packageID, key, visible[key], entitled)
+			}
+		}
+		music, _ := findInvitationModule("music")
+		musicFields := make(map[string]bool)
+		for _, field := range allowedBuilderFields(music, features) {
+			musicFields[field.key] = true
+		}
+		if musicFields["media_id"] != features.CustomMusic {
+			t.Errorf("%s custom music input visibility = %v, entitlement = %v", packageID, musicFields["media_id"], features.CustomMusic)
+		}
+		for id, expected := range map[string]int{
+			"gallery": int(order.MaxPhotos),
+			"video":   int(order.MaxVideos),
+			"events":  int(effectiveEventLimit(order, features)),
+		} {
+			spec, _ := findInvitationModule(id)
+			if got := builderItemLimit(spec, order, features); got != expected {
+				t.Errorf("%s %s limit = %d, want database limit %d", packageID, id, got, expected)
+			}
+			moduleURL := server.URL + "/orders/" + orderNumber + "/builder/" + id
+			csrf := getCSRF(t, client, moduleURL)
+			values := url.Values{
+				"csrf_token": {csrf}, "draft_version": {"1"},
+				"item_count": {strconv.Itoa(expected + 1)},
+			}
+			for index := 0; index <= expected; index++ {
+				switch id {
+				case "gallery":
+					values.Set(fmt.Sprintf("item_%d_caption", index), "Foto")
+				case "video":
+					values.Set(fmt.Sprintf("item_%d_title", index), "Video")
+					values.Set(fmt.Sprintf("item_%d_url", index), "https://youtube.com/watch?v=test")
+				case "events":
+					values.Set(fmt.Sprintf("item_%d_name", index), "Acara")
+				}
+			}
+			response := postForm(t, client, moduleURL, values)
+			response.Body.Close()
+			if response.StatusCode != http.StatusBadRequest {
+				t.Errorf("%s %s over-limit save status = %d, want 400", packageID, id, response.StatusCode)
+			}
+		}
 	}
 }
 
@@ -284,6 +533,14 @@ func TestInvitationMediaUploadSelectionAndDeletion(t *testing.T) {
 	if invalid.StatusCode != http.StatusBadRequest {
 		t.Fatalf("invalid media status=%d body=%s", invalid.StatusCode, invalidBody)
 	}
+	mediaDirectory := filepath.Join(db.UploadDir, "invitation-media")
+	temporaryFiles, err := os.ReadDir(mediaDirectory)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(temporaryFiles) != 0 {
+		t.Fatalf("invalid upload left temporary files: %#v", temporaryFiles)
+	}
 	oversized := postInvitationMedia(t, client, uploadURL, csrf, "gallery", "large.png", make([]byte, maxInvitationMediaSize+1))
 	oversized.Body.Close()
 	if oversized.StatusCode != http.StatusRequestEntityTooLarge {
@@ -349,8 +606,23 @@ func TestInvitationMediaUploadSelectionAndDeletion(t *testing.T) {
 	}
 
 	csrf = getCSRF(t, client, moduleURL)
-	response = postForm(t, client, imageURL+"/delete", url.Values{
+	mediaURL := server.URL + "/orders/" + orderNumber + "/builder/media/" + strconv.FormatInt(media[0].ID, 10)
+	response = postForm(t, client, mediaURL, url.Values{
 		"csrf_token": {csrf}, "draft_version": {"2"},
+		"media_caption": {"Foto pilihan"}, "media_sort_order": {"0"},
+	})
+	response.Body.Close()
+	if response.StatusCode != http.StatusOK {
+		t.Fatalf("save media caption and order status=%d", response.StatusCode)
+	}
+	updatedMedia, err := db.GetInvitationMedia(context.Background(), order.ID, media[0].ID)
+	if err != nil || updatedMedia.Caption != "Foto pilihan" || updatedMedia.SortOrder != 0 {
+		t.Fatalf("media caption/order = %q/%d err=%v", updatedMedia.Caption, updatedMedia.SortOrder, err)
+	}
+
+	csrf = getCSRF(t, client, moduleURL)
+	response = postForm(t, client, imageURL+"/delete", url.Values{
+		"csrf_token": {csrf}, "draft_version": {"3"},
 	})
 	response.Body.Close()
 	if response.StatusCode != http.StatusOK {
@@ -363,8 +635,8 @@ func TestInvitationMediaUploadSelectionAndDeletion(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if order.DraftVersion != 3 {
-		t.Fatalf("media deletion draft version=%d, want 3", order.DraftVersion)
+	if order.DraftVersion != 4 {
+		t.Fatalf("media deletion draft version=%d, want 4", order.DraftVersion)
 	}
 	draft, err = decodeInvitationDraft(order.DraftData)
 	if err != nil {

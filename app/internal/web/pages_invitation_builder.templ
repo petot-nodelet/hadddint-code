@@ -3,6 +3,7 @@ package web
 import (
 	"fmt"
 	"net/url"
+	"strings"
 )
 
 templ InvitationBuilderPage(data BuilderPageData) {
@@ -59,30 +60,59 @@ templ invitationBuilderContent(data BuilderPageData) {
 					if !data.Module.Available {
 						<p class="mt-4 rounded-lg border border-line bg-sand p-4 text-sm">Modul ini tidak dapat diedit dengan paket pesanan saat ini.</p>
 					} else {
-						<form method="post" action={ templ.SafeURL("/orders/" + url.PathEscape(data.Order.OrderNumber) + "/builder/" + data.Module.ID) } class="mt-6 space-y-4">
+						<form method="post" action={ templ.SafeURL("/orders/" + url.PathEscape(data.Order.OrderNumber) + "/builder/" + data.Module.ID) } class="mt-6 space-y-4" data-builder-form data-draft-version={ fmt.Sprint(data.Order.DraftVersion) } data-storage-key={ "invitation-builder-" + data.Order.OrderNumber + "-" + data.Module.ID }>
 							<input type="hidden" name="csrf_token" value={ data.Page.CSRF }/>
 							<input type="hidden" name="draft_version" value={ fmt.Sprint(data.Order.DraftVersion) }/>
 							for _, field := range data.Fields {
 								@builderInput(field, "field_"+field.Key)
 							}
-							if len(data.Items) > 0 {
+							if data.ItemLimit > 0 {
 								<input type="hidden" name="item_count" value={ fmt.Sprint(len(data.Items)) }/>
-								for index, item := range data.Items {
-									<fieldset class="space-y-4 rounded-xl border border-line p-4">
-										<legend class="px-2 text-sm font-semibold">Item { fmt.Sprint(index + 1) }</legend>
-										for _, field := range item.Fields {
-											@builderInput(field, fmt.Sprintf("item_%d_%s", index, field.Key))
-										}
-									</fieldset>
+								<div data-builder-items data-item-limit={ fmt.Sprint(data.ItemLimit) }>
+									for index, item := range data.Items {
+										<fieldset class="builder-item space-y-4 rounded-xl border border-line p-4">
+											<legend class="px-2 text-sm font-semibold">Item { fmt.Sprint(index + 1) }</legend>
+											for _, field := range item.Fields {
+												@builderInput(field, fmt.Sprintf("item_%d_%s", index, field.Key))
+											}
+											<div class="flex flex-wrap gap-2">
+												<button class="btn btn-outline" type="button" data-item-up>Naikkan</button>
+												<button class="btn btn-outline" type="button" data-item-down>Turunkan</button>
+												<button class="btn btn-outline" type="button" data-item-remove>Hapus item</button>
+											</div>
+										</fieldset>
+									}
+									<button class="btn btn-outline" type="button" data-item-add>Tambah item</button>
+									<p class="text-sm text-ink-muted" data-item-quota>{ fmt.Sprint(len(data.Items)) } / { fmt.Sprint(data.ItemLimit) } item</p>
+								</div>
+								if len(data.Items) > 0 {
+									<template data-item-template>
+										<fieldset class="builder-item space-y-4 rounded-xl border border-line p-4">
+											<legend class="px-2 text-sm font-semibold">Item baru</legend>
+											for _, field := range data.Items[0].Fields {
+												@builderInput(field, "item_0_"+field.Key)
+											}
+											<div class="flex flex-wrap gap-2">
+												<button class="btn btn-outline" type="button" data-item-up>Naikkan</button>
+												<button class="btn btn-outline" type="button" data-item-down>Turunkan</button>
+												<button class="btn btn-outline" type="button" data-item-remove>Hapus item</button>
+											</div>
+										</fieldset>
+									</template>
 								}
 							}
-							<button class="btn btn-primary w-full sm:w-auto" type="submit">Simpan modul</button>
+							<p role="status" aria-live="polite" class="text-sm text-ink-muted" data-save-status>Perubahan tersimpan.</p>
+							<div class="flex flex-wrap items-center gap-3">
+								<button class="btn btn-primary w-full sm:w-auto" type="submit">Simpan modul</button>
+								<button class="hidden text-sm text-gold underline" type="button" data-restore-draft>Pulihkan perubahan lokal</button>
+							</div>
 						</form>
 					}
 				</div>
 				<div class="card p-5 sm:p-7">
 					<h2 class="font-serif text-xl">Media pesanan</h2>
 					<p class="mt-2 text-sm text-ink-muted">Gambar JPEG, PNG, atau WEBP dan audio MP3/OGG maksimal 5 MiB per file. File disimpan privat dan hanya dapat dibuka dengan akses pesanan ini.</p>
+					<p class="mt-2 text-sm text-ink-muted">Kuota foto: { fmt.Sprint(data.PhotoCount) } / { fmt.Sprint(data.PhotoLimit) }. Kuota video: { fmt.Sprint(len(data.Draft.Modules["video"].Items)) } / { fmt.Sprint(data.Order.MaxVideos) }.</p>
 					<form method="post" enctype="multipart/form-data" action={ templ.SafeURL("/orders/" + url.PathEscape(data.Order.OrderNumber) + "/builder/media") } class="mt-4 grid gap-3 sm:grid-cols-[12rem_minmax(0,1fr)_auto]">
 						<input type="hidden" name="csrf_token" value={ data.Page.CSRF }/>
 						<label class="form-label">
@@ -107,11 +137,31 @@ templ invitationBuilderContent(data BuilderPageData) {
 						<ul class="mt-5 divide-y divide-line">
 							for _, media := range data.Media {
 								<li class="flex flex-wrap items-center justify-between gap-3 py-3">
-									<div>
+									<div class="flex min-w-0 items-center gap-3">
+										if strings.HasPrefix(media.MimeType, "image/") {
+											<img class="h-16 w-16 rounded-lg object-cover" loading="lazy" alt={ "Pratinjau " + media.MediaType } src={ templ.SafeURL(fmt.Sprintf("/orders/%s/builder/media/%d", url.PathEscape(data.Order.OrderNumber), media.ID)) }/>
+										} else {
+											<audio class="max-w-40" controls preload="none" src={ templ.SafeURL(fmt.Sprintf("/orders/%s/builder/media/%d", url.PathEscape(data.Order.OrderNumber), media.ID)) }></audio>
+										}
+										<div>
 										<p class="text-sm font-semibold">{ media.MediaType } · #{ fmt.Sprint(media.ID) }</p>
 										<p class="text-xs text-ink-muted">{ media.MimeType } · { fmt.Sprint(media.SizeBytes) } bytes</p>
+										</div>
 									</div>
 									<a class="text-sm text-gold hover:underline" href={ templ.SafeURL(fmt.Sprintf("/orders/%s/builder/media/%d", url.PathEscape(data.Order.OrderNumber), media.ID)) }>Buka privat</a>
+									<form method="post" action={ templ.SafeURL(fmt.Sprintf("/orders/%s/builder/media/%d", url.PathEscape(data.Order.OrderNumber), media.ID)) } class="grid w-full gap-2 sm:grid-cols-[minmax(0,1fr)_8rem_auto]">
+										<input type="hidden" name="csrf_token" value={ data.Page.CSRF }/>
+										<input type="hidden" name="draft_version" value={ fmt.Sprint(data.Order.DraftVersion) }/>
+										<label class="form-label">
+											<span>Caption</span>
+											<input class="form-input" name="media_caption" maxlength="200" value={ media.Caption }/>
+										</label>
+										<label class="form-label">
+											<span>Urutan</span>
+											<input class="form-input" type="number" min="0" name="media_sort_order" value={ fmt.Sprint(media.SortOrder) }/>
+										</label>
+										<button class="btn btn-outline sm:mt-6" type="submit">Simpan media</button>
+									</form>
 									<form method="post" action={ templ.SafeURL(fmt.Sprintf("/orders/%s/builder/media/%d/delete", url.PathEscape(data.Order.OrderNumber), media.ID)) }>
 										<input type="hidden" name="csrf_token" value={ data.Page.CSRF }/>
 										<input type="hidden" name="draft_version" value={ fmt.Sprint(data.Order.DraftVersion) }/>
@@ -125,6 +175,7 @@ templ invitationBuilderContent(data BuilderPageData) {
 			</div>
 		</div>
 	</section>
+	<script src="/static/js/invitation-builder.js" defer></script>
 }
 
 templ builderInput(field BuilderField, name string) {

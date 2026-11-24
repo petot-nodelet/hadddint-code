@@ -1,6 +1,7 @@
 package web
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"log"
@@ -54,6 +55,9 @@ func NewServer(db *storage.DB, manager *auth.Manager, staticDir string) (*Server
 	absoluteStaticDir, err := filepath.Abs(staticDir)
 	if err != nil {
 		return nil, fmt.Errorf("web: resolve static directory: %w", err)
+	}
+	if err := db.CleanupOrphanedInvitationMedia(context.Background(), 24*time.Hour); err != nil {
+		return nil, fmt.Errorf("web: clean orphaned invitation media: %w", err)
 	}
 	return &Server{
 		DB: db, Auth: manager, StaticDir: absoluteStaticDir,
@@ -109,6 +113,7 @@ func (s *Server) Routes() http.Handler {
 	r.Get("/orders/{orderNumber}/builder/{module}", s.handleInvitationBuilder)
 	r.Post("/orders/{orderNumber}/builder/{module}", s.handleSaveInvitationModule)
 	r.Post("/orders/{orderNumber}/builder/media", s.handleInvitationMediaUpload)
+	r.Post("/orders/{orderNumber}/builder/media/{mediaID}", s.handleInvitationMediaDetails)
 	r.Post("/orders/{orderNumber}/builder/media/{mediaID}/delete", s.handleInvitationMediaDelete)
 	r.Get("/orders/{orderNumber}/builder/media/{mediaID}", s.handleInvitationMedia)
 	r.Get("/orders/{orderNumber}/builder/music/{trackID}", s.handleInvitationMusicTrack)

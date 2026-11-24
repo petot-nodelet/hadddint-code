@@ -77,17 +77,20 @@ type BuilderModule struct {
 }
 
 type BuilderPageData struct {
-	Page    PageData
-	Order   storage.InvitationOrder
-	Draft   InvitationDraft
-	Module  BuilderModule
-	Modules []BuilderModule
-	Fields  []BuilderField
-	Items   []BuilderItem
-	Media   []storage.InvitationMedia
-	Error   string
-	Saved   bool
-	Preview bool
+	Page       PageData
+	Order      storage.InvitationOrder
+	Draft      InvitationDraft
+	Module     BuilderModule
+	Modules    []BuilderModule
+	Fields     []BuilderField
+	Items      []BuilderItem
+	ItemLimit  int
+	Media      []storage.InvitationMedia
+	PhotoLimit int64
+	PhotoCount int64
+	Error      string
+	Saved      bool
+	Preview    bool
 }
 
 type builderFieldSpec struct {
@@ -475,10 +478,28 @@ func (s *Server) handleSaveInvitationModule(w http.ResponseWriter, r *http.Reque
 	}
 	if err := s.DB.SaveInvitationDraft(r.Context(), order.ID, version, string(draftJSON), slug); err != nil {
 		if errors.Is(err, storage.ErrDraftConflict) {
+			if r.Header.Get("X-Builder-Autosave") == "true" {
+				http.Error(w, "Draft berubah di tab atau perangkat lain. Perubahan lokal dipertahankan.", http.StatusConflict)
+				return
+			}
 			s.renderInvitationBuilder(w, r, order, features, moduleID, "Draft berubah di tab atau perangkat lain. Muat ulang sebelum menyimpan.", false, http.StatusConflict)
 			return
 		}
 		s.fail(w, "save invitation module", err)
+		return
+	}
+	if r.Header.Get("X-Builder-Autosave") == "true" {
+		responseBody, err := json.Marshal(struct {
+			Version int64 `json:"version"`
+		}{Version: version + 1})
+		if err != nil {
+			s.fail(w, "encode invitation autosave response", err)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		if _, err := w.Write(append(responseBody, '\n')); err != nil {
+			s.fail(w, "write invitation autosave response", err)
+		}
 		return
 	}
 	http.Redirect(w, r, "/orders/"+url.PathEscape(order.OrderNumber)+"/builder/"+url.PathEscape(moduleID)+"?saved=1", http.StatusSeeOther)
@@ -512,7 +533,12 @@ func (s *Server) renderInvitationBuilder(w http.ResponseWriter, r *http.Request,
 	data := BuilderPageData{
 		Page: page, Order: order, Draft: draft, Module: BuilderModule{ID: spec.id, Title: spec.title, Available: builderModuleAvailable(spec, features, order), Complete: moduleIsComplete(spec, module)},
 		Modules: builderModuleNav(draft, features, order), Error: message, Saved: r.URL.Query().Get("saved") == "1",
-		Media: media, Preview: preview,
+		Media: media, Preview: preview, PhotoLimit: order.MaxPhotos,
+	}
+	for _, item := range media {
+		if item.MediaType != "audio" {
+			data.PhotoCount++
+		}
 	}
 	fields := allowedBuilderFields(spec, features)
 	settingDefaults := map[string]string{}
@@ -548,6 +574,7 @@ func (s *Server) renderInvitationBuilder(w http.ResponseWriter, r *http.Request,
 		fields := allowedBuilderItemFields(spec, features)
 		rows := module.Items
 		limit := builderItemLimit(spec, order, features)
+		data.ItemLimit = limit
 		if len(rows) < limit {
 			rows = append(append([]map[string]string(nil), rows...), map[string]string{})
 		}
@@ -895,9 +922,12 @@ func (s *Server) handleInvitationMediaUpload(w http.ResponseWriter, r *http.Requ
 		return
 	}
 	r.Body = http.MaxBytesReader(w, r.Body, maxInvitationMediaSize+(1<<20))
-	if err := r.ParseMultipartForm(maxInvitationMediaSize); err != nil {
+	if err := r.ParseMultipartForm(1 << 20); err != nil {
 		http.Error(w, "Form unggahan terlalu besar atau tidak valid.", http.StatusRequestEntityTooLarge)
 		return
+	}
+	if r.MultipartForm != nil {
+		defer r.MultipartForm.RemoveAll()
 	}
 	mediaType := strings.TrimSpace(r.PostForm.Get("media_type"))
 	if mediaType != "portrait" && mediaType != "cover" && mediaType != "story" && mediaType != "gallery" && mediaType != "audio" {
@@ -918,20 +948,6 @@ func (s *Server) handleInvitationMediaUpload(w http.ResponseWriter, r *http.Requ
 		http.Error(w, "File media maksimal 5 MiB.", http.StatusRequestEntityTooLarge)
 		return
 	}
-	data, err := io.ReadAll(io.LimitReader(file, maxInvitationMediaSize+1))
-	if err != nil {
-		s.fail(w, "read invitation upload", err)
-		return
-	}
-	if len(data) == 0 || len(data) > maxInvitationMediaSize {
-		http.Error(w, "File media maksimal 5 MiB.", http.StatusRequestEntityTooLarge)
-		return
-	}
-	contentType, extension, err := validateInvitationMedia(mediaType, data)
-	if err != nil {
-		http.Error(w, "Format file media tidak didukung atau isi file tidak valid.", http.StatusBadRequest)
-		return
-	}
 	if s.DB.UploadDir == "" {
 		http.Error(w, "Penyimpanan media belum dikonfigurasi.", http.StatusServiceUnavailable)
 		return
@@ -945,6 +961,42 @@ func (s *Server) handleInvitationMediaUpload(w http.ResponseWriter, r *http.Requ
 		s.fail(w, "restrict invitation media directory", err)
 		return
 	}
+	temporary, err := os.CreateTemp(directory, ".invitation-upload-*")
+	if err != nil {
+		s.fail(w, "create temporary invitation media file", err)
+		return
+	}
+	temporaryPath := temporary.Name()
+	defer func() {
+		if err := os.Remove(temporaryPath); err != nil && !errors.Is(err, os.ErrNotExist) {
+			s.fail(w, "clean temporary invitation media", err)
+		}
+	}()
+	if err := temporary.Chmod(0o600); err != nil {
+		_ = temporary.Close()
+		s.fail(w, "restrict temporary invitation media", err)
+		return
+	}
+	size, err := io.Copy(temporary, io.LimitReader(file, maxInvitationMediaSize+1))
+	if err != nil {
+		_ = temporary.Close()
+		s.fail(w, "stream invitation upload", err)
+		return
+	}
+	if size == 0 || size > maxInvitationMediaSize {
+		_ = temporary.Close()
+		http.Error(w, "File media maksimal 5 MiB.", http.StatusRequestEntityTooLarge)
+		return
+	}
+	if err := temporary.Close(); err != nil {
+		s.fail(w, "close temporary invitation media", err)
+		return
+	}
+	contentType, extension, err := validateInvitationMediaFile(mediaType, temporaryPath)
+	if err != nil {
+		http.Error(w, "Format file media tidak didukung atau isi file tidak valid.", http.StatusBadRequest)
+		return
+	}
 	var randomName [18]byte
 	if _, err := rand.Read(randomName[:]); err != nil {
 		s.fail(w, "generate invitation media name", err)
@@ -952,27 +1004,13 @@ func (s *Server) handleInvitationMediaUpload(w http.ResponseWriter, r *http.Requ
 	}
 	storedName := hex.EncodeToString(randomName[:]) + extension
 	path := filepath.Join(directory, storedName)
-	output, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
-	if err != nil {
-		s.fail(w, "create invitation media file", err)
-		return
-	}
-	if _, err := output.Write(data); err != nil {
-		_ = output.Close()
-		if removeErr := os.Remove(path); removeErr != nil && !errors.Is(removeErr, os.ErrNotExist) {
-			s.fail(w, "clean failed invitation media write", fmt.Errorf("%v; cleanup: %w", err, removeErr))
-			return
-		}
-		s.fail(w, "write invitation media", err)
-		return
-	}
-	if err := output.Close(); err != nil {
-		s.fail(w, "close invitation media file", err)
+	if err := os.Rename(temporaryPath, path); err != nil {
+		s.fail(w, "move validated invitation media", err)
 		return
 	}
 	mediaID, err := s.DB.CreateInvitationMedia(r.Context(), storage.InvitationMedia{
 		OrderID: order.ID, MediaType: mediaType, StoredName: storedName,
-		MimeType: contentType, SizeBytes: int64(len(data)), Caption: "", SortOrder: 0,
+		MimeType: contentType, SizeBytes: size, Caption: "", SortOrder: 0,
 	}, order.MaxPhotos, features.CustomMusic)
 	if err != nil {
 		if removeErr := os.Remove(path); removeErr != nil && !errors.Is(removeErr, os.ErrNotExist) {
@@ -1001,6 +1039,74 @@ func invitationMediaTypeAvailable(mediaType string, features storage.InvitationF
 	default:
 		return mediaType == "portrait" || mediaType == "gallery"
 	}
+}
+
+func (s *Server) handleInvitationMediaDetails(w http.ResponseWriter, r *http.Request) {
+	_, order, features, ok := s.getBuilderOrder(w, r)
+	if !ok {
+		return
+	}
+	mediaID, err := strconv.ParseInt(chi.URLParam(r, "mediaID"), 10, 64)
+	if err != nil || mediaID < 1 {
+		http.NotFound(w, r)
+		return
+	}
+	media, err := s.DB.GetInvitationMedia(r.Context(), order.ID, mediaID)
+	if errors.Is(err, storage.ErrNotFound) {
+		http.NotFound(w, r)
+		return
+	}
+	if err != nil {
+		s.fail(w, "load invitation media details", err)
+		return
+	}
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, "Form media tidak valid.", http.StatusBadRequest)
+		return
+	}
+	version, err := strconv.ParseInt(r.PostForm.Get("draft_version"), 10, 64)
+	if err != nil || version != order.DraftVersion {
+		s.renderInvitationBuilder(w, r, order, features, "gallery", "Draft berubah di tab atau perangkat lain. Muat ulang sebelum menyimpan media.", false, http.StatusConflict)
+		return
+	}
+	caption := strings.TrimSpace(r.PostForm.Get("media_caption"))
+	if utf8.RuneCountInString(caption) > 200 {
+		s.renderInvitationBuilder(w, r, order, features, "gallery", "Caption media maksimal 200 karakter.", false, http.StatusBadRequest)
+		return
+	}
+	sortOrder, err := strconv.ParseInt(r.PostForm.Get("media_sort_order"), 10, 64)
+	mediaItems, listErr := s.DB.ListInvitationMedia(r.Context(), order.ID)
+	if listErr != nil {
+		s.fail(w, "list invitation media for ordering", listErr)
+		return
+	}
+	if err != nil || sortOrder < 0 || sortOrder >= int64(len(mediaItems)) {
+		s.renderInvitationBuilder(w, r, order, features, "gallery", "Urutan media tidak valid.", false, http.StatusBadRequest)
+		return
+	}
+	draft, err := decodeInvitationDraft(order.DraftData)
+	if err != nil {
+		s.fail(w, "decode invitation draft for media details", err)
+		return
+	}
+	draftJSON, err := json.Marshal(draft)
+	if err != nil {
+		s.fail(w, "encode invitation draft for media details", err)
+		return
+	}
+	if err := s.DB.SaveInvitationMediaDetails(r.Context(), order.ID, media.ID, version, string(draftJSON), order.InvitationSlug, caption, sortOrder); err != nil {
+		if errors.Is(err, storage.ErrDraftConflict) {
+			s.renderInvitationBuilder(w, r, order, features, "gallery", "Draft berubah di tab atau perangkat lain. Muat ulang sebelum menyimpan media.", false, http.StatusConflict)
+			return
+		}
+		if errors.Is(err, storage.ErrNotFound) {
+			http.NotFound(w, r)
+			return
+		}
+		s.fail(w, "save invitation media details", err)
+		return
+	}
+	http.Redirect(w, r, "/orders/"+url.PathEscape(order.OrderNumber)+"/builder/gallery?saved=1", http.StatusSeeOther)
 }
 
 func (s *Server) handleInvitationMediaDelete(w http.ResponseWriter, r *http.Request) {
@@ -1109,6 +1215,98 @@ func validateInvitationMedia(mediaType string, data []byte) (string, string, err
 	}
 	if validOggAudio(data) {
 		return "audio/ogg", ".ogg", nil
+	}
+	return "", "", errors.New("invalid audio signature")
+}
+
+func validateInvitationMediaFile(mediaType, path string) (string, string, error) {
+	file, err := os.Open(path)
+	if err != nil {
+		return "", "", err
+	}
+	defer file.Close()
+
+	header := make([]byte, 12)
+	n, err := io.ReadFull(file, header)
+	if err != nil && err != io.EOF && err != io.ErrUnexpectedEOF {
+		return "", "", err
+	}
+	header = header[:n]
+	if mediaType != "audio" {
+		switch {
+		case len(header) >= 3 && bytes.Equal(header[:3], []byte{0xff, 0xd8, 0xff}):
+			if _, err := file.Seek(0, io.SeekStart); err != nil {
+				return "", "", err
+			}
+			if _, _, err := image.DecodeConfig(file); err != nil {
+				return "", "", err
+			}
+			return "image/jpeg", ".jpg", nil
+		case len(header) >= 8 && bytes.Equal(header[:8], []byte("\x89PNG\r\n\x1a\n")):
+			if _, err := file.Seek(0, io.SeekStart); err != nil {
+				return "", "", err
+			}
+			if _, _, err := image.DecodeConfig(file); err != nil {
+				return "", "", err
+			}
+			return "image/png", ".png", nil
+		case len(header) >= 12 && string(header[:4]) == "RIFF" && string(header[8:12]) == "WEBP":
+			info, err := file.Stat()
+			if err != nil {
+				return "", "", err
+			}
+			declaredSize := binary.LittleEndian.Uint32(header[4:8])
+			if declaredSize < 4 || uint64(declaredSize)+8 > uint64(info.Size()) {
+				return "", "", errors.New("invalid WEBP size")
+			}
+			return "image/webp", ".webp", nil
+		default:
+			return "", "", errors.New("invalid image signature")
+		}
+	}
+
+	if validMP3Frame(header) {
+		return "audio/mpeg", ".mp3", nil
+	}
+	if len(header) >= 10 && string(header[:3]) == "ID3" && header[3] >= 2 && header[3] <= 4 && header[4] != 0xff &&
+		header[6]&0x80 == 0 && header[7]&0x80 == 0 && header[8]&0x80 == 0 && header[9]&0x80 == 0 {
+		tagSize := int64(header[6])<<21 | int64(header[7])<<14 | int64(header[8])<<7 | int64(header[9])
+		offset := int64(10) + tagSize
+		if header[5]&0x10 != 0 {
+			offset += 10
+		}
+		if _, err := file.Seek(offset, io.SeekStart); err != nil {
+			return "", "", err
+		}
+		var frame [4]byte
+		if _, err := io.ReadFull(file, frame[:]); err == nil && validMP3Frame(frame[:]) {
+			return "audio/mpeg", ".mp3", nil
+		}
+	}
+	if len(header) >= 4 && string(header[:4]) == "OggS" {
+		if _, err := file.Seek(0, io.SeekStart); err != nil {
+			return "", "", err
+		}
+		oggHeader := make([]byte, 27)
+		if _, err := io.ReadFull(file, oggHeader); err != nil || oggHeader[4] != 0 {
+			return "", "", errors.New("invalid OGG page")
+		}
+		segmentCount := int(oggHeader[26])
+		segments := make([]byte, segmentCount)
+		if _, err := io.ReadFull(file, segments); err != nil || segmentCount == 0 {
+			return "", "", errors.New("invalid OGG segments")
+		}
+		packetSize := int(segments[0])
+		packet := make([]byte, packetSize)
+		if _, err := io.ReadFull(file, packet); err != nil {
+			return "", "", err
+		}
+		if bytes.HasPrefix(packet, []byte("OpusHead")) ||
+			bytes.HasPrefix(packet, []byte{0x01, 'v', 'o', 'r', 'b', 'i', 's'}) ||
+			bytes.HasPrefix(packet, []byte("Speex   ")) ||
+			bytes.HasPrefix(packet, []byte{0x7f, 'F', 'L', 'A', 'C'}) {
+			return "audio/ogg", ".ogg", nil
+		}
 	}
 	return "", "", errors.New("invalid audio signature")
 }
